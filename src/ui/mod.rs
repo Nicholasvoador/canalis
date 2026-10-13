@@ -54,7 +54,9 @@ pub fn run(store: SettingsStore, status_path: PathBuf, start_page: StartPage) ->
             egui_extras::install_image_loaders(&creation.egui_ctx);
             fonts::install(&creation.egui_ctx);
             theme::apply(&creation.egui_ctx);
-            Ok(Box::new(app::CanalisApp::new(store, status_path, start_page)))
+            let mut window = app::CanalisApp::new(store, status_path, start_page);
+            window.start_companions(&creation.egui_ctx);
+            Ok(Box::new(window))
         }),
     )
     .map_err(|error| error.to_string())

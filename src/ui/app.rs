@@ -76,6 +76,11 @@ impl CanalisApp {
         }
     }
 
+    /// Starts whatever the window needs that isn't running: the service and LibreHardwareMonitor.
+    pub fn start_companions(&mut self, ctx: &egui::Context) {
+        self.jobs.start_companions(ctx);
+    }
+
     fn handle_finished_job(&mut self) {
         let Some(outcome) = self.jobs.poll() else { return };
         let (text, is_error) = match outcome {
@@ -86,6 +91,7 @@ impl CanalisApp {
             }
             JobOutcome::Done(message) => (message, false),
             JobOutcome::Failed(error) => (error, true),
+            JobOutcome::NothingToReport => return,
         };
         self.setting_page.reload_login_start();
         self.notice = Some(Notice { text, is_error, shown_at: Instant::now() });

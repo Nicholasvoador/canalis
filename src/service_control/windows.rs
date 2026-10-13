@@ -5,7 +5,7 @@
 use crate::hidden_command::hidden_command;
 use crate::paths;
 use std::process::Stdio;
-use sysinfo::{Pid, ProcessesToUpdate, System};
+use sysinfo::{Pid, Process, ProcessesToUpdate, System};
 use winreg::RegKey;
 use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_WRITE};
 
@@ -27,15 +27,28 @@ pub fn start() -> Result<(), String> {
 
 /// Ends the service process and waits for it, so the screen's port is free again.
 pub fn stop() -> Result<(), String> {
-    let pid = Pid::from_u32(service_process_id().ok_or("the service is not running")?);
+    let stopped = with_service_process(|process| {
+        let killed = process.kill();
+        process.wait();
+        killed
+    });
+    match stopped {
+        Some(true) => Ok(()),
+        Some(false) => Err("cannot stop the service".into()),
+        None => Err("the service is not running".into()),
+    }
+}
+
+pub fn is_running() -> bool {
+    with_service_process(|_| ()).is_some()
+}
+
+/// Runs `action` on the service's process, found through the process ID in the status file.
+fn with_service_process<R>(action: impl FnOnce(&Process) -> R) -> Option<R> {
+    let pid = service_process_id().filter(|pid| *pid != std::process::id()).map(Pid::from_u32)?;
     let mut system = System::new();
     system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
-    let process = system.process(pid).filter(|process| is_canalis(&process.name().to_string_lossy())).ok_or("the service is not running")?;
-    if !process.kill() {
-        return Err("cannot stop the service".into());
-    }
-    process.wait();
-    Ok(())
+    system.process(pid).filter(|process| is_canalis(&process.name().to_string_lossy())).map(action)
 }
 
 /// Starts the service whether or not it was running before.

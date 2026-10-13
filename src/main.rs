@@ -3,6 +3,7 @@
 mod app_icon;
 mod cli;
 mod device_config;
+mod hardware_monitor;
 mod hidden_command;
 mod kanali_assets;
 mod link;
@@ -23,6 +24,9 @@ use clap::Parser;
 use cli::{Cli, Command};
 use settings::SettingsStore;
 use std::process::ExitCode;
+use std::time::Duration;
+
+const HARDWARE_MONITOR_GRACE: Duration = Duration::from_secs(30);
 
 fn main() -> ExitCode {
     #[cfg(windows)]
@@ -55,11 +59,22 @@ fn run_service(store: SettingsStore, port: Option<String>) -> ExitCode {
         let status = status::StatusWriter::new(paths::status_path());
         service::ScreenService::new(store, status, port).run_forever();
     });
+    std::thread::spawn(start_hardware_monitor_after_login);
     if let Err(error) = tray::run() {
         eprintln!("canalis: {error}; running without a tray icon");
     }
     let _never_finishes = screen_link.join();
     ExitCode::SUCCESS
+}
+
+/// LibreHardwareMonitor's own login task gets the first chance to start it.
+fn start_hardware_monitor_after_login() {
+    std::thread::sleep(HARDWARE_MONITOR_GRACE);
+    match hardware_monitor::ensure_running() {
+        Ok(Some(message)) => eprintln!("canalis: {message}"),
+        Ok(None) => {}
+        Err(error) => eprintln!("canalis: {error}"),
+    }
 }
 
 /// Only one service may talk to the screen; with no console, its messages go to a log file.

@@ -1,5 +1,6 @@
 //! Slow work (adb pushes, service control) runs on a worker thread so the window stays responsive.
 
+use crate::hardware_monitor;
 use crate::media::AdbScreen;
 use crate::service_control::{self, ServiceAction};
 use std::path::PathBuf;
@@ -9,6 +10,7 @@ pub enum JobOutcome {
     MediaAdded(Vec<String>),
     Done(String),
     Failed(String),
+    NothingToReport,
 }
 
 #[derive(Default)]
@@ -26,6 +28,18 @@ impl Jobs {
             let library = AdbScreen::new();
             match files.iter().map(|file| library.add(file)).collect::<Result<Vec<_>, _>>() {
                 Ok(names) => JobOutcome::MediaAdded(names),
+                Err(error) => JobOutcome::Failed(error),
+            }
+        });
+    }
+
+    /// Starts the service and LibreHardwareMonitor if either isn't running.
+    pub fn start_companions(&mut self, ctx: &eframe::egui::Context) {
+        self.spawn("Starting the service…", ctx, || {
+            let started: Result<Vec<String>, String> = [service_control::ensure_running(), hardware_monitor::ensure_running()].into_iter().filter_map(Result::transpose).collect();
+            match started {
+                Ok(messages) if messages.is_empty() => JobOutcome::NothingToReport,
+                Ok(messages) => JobOutcome::Done(messages.join(", ")),
                 Err(error) => JobOutcome::Failed(error),
             }
         });

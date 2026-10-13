@@ -14,6 +14,14 @@ use windows as platform;
 
 pub use platform::{is_login_start_enabled, set_login_start};
 
+/// Starts the service when it isn't running; returns a message when it was started.
+pub fn ensure_running() -> Result<Option<String>, String> {
+    if platform::is_running() {
+        return Ok(None);
+    }
+    platform::start().map(|()| Some("Service started".into()))
+}
+
 #[derive(Clone, Copy)]
 pub enum ServiceAction {
     Start,

@@ -16,6 +16,10 @@ pub fn restart() -> Result<(), String> {
     systemctl(&["restart", UNIT]).map(drop)
 }
 
+pub fn is_running() -> bool {
+    hidden_command("systemctl").args(["--user", "is-active", "--quiet", UNIT]).status().is_ok_and(|status| status.success())
+}
+
 pub fn is_login_start_enabled() -> Result<bool, String> {
     let output = hidden_command("systemctl").args(["--user", "is-enabled", UNIT]).output().map_err(cannot_run)?;
     Ok(String::from_utf8_lossy(&output.stdout).trim() == "enabled")

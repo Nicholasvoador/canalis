@@ -47,7 +47,7 @@ Remove it with `.\uninstall-windows.ps1`. Your settings are kept, and so are Lib
 
 ## Use
 
-Open **Canalis** from the launcher or Start menu, or run `canalis`. To open on a specific page: `canalis ui --page fan`. The pages are `home`, `specifications`, `presets`, `customization`, `screen`, `fan` and `setting`.
+Open **Canalis** from the launcher or Start menu, or run `canalis`. Opening the window also starts the service if it isn't running, and on Windows starts LibreHardwareMonitor through its login task (no administrator prompt). To open on a specific page: `canalis ui --page fan`. The pages are `home`, `specifications`, `presets`, `customization`, `screen`, `fan` and `setting`.
 
 The **SETTING** page starts, restarts and stops the service, and turns **Start at login** on or off.
 
