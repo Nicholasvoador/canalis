@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Builds and installs Canalis for the current user on Omarchy / Arch Linux.
+# Installs Canalis for the current user on Omarchy / Arch Linux. A release download includes the
+# canalis binary; in a source checkout it is built first.
 set -euo pipefail
 
 SOURCE_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -7,10 +8,13 @@ BINARY="$HOME/.local/bin/canalis"
 ICON="$HOME/.local/share/icons/hicolor/256x256/apps/canalis.png"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 SETTINGS_FILE="$CONFIG_HOME/canalis/settings.json"
+PREBUILT="$SOURCE_DIRECTORY/canalis"
 
 install_packages() {
-  echo "==> Installing rust, adb and lm_sensors (sudo)"
-  sudo pacman -S --needed rust android-tools lm_sensors
+  local packages=(android-tools lm_sensors)
+  [[ -x "$PREBUILT" ]] || packages+=(rust)
+  echo "==> Installing ${packages[*]} (sudo)"
+  sudo pacman -S --needed "${packages[@]}"
 }
 
 # Linux's kernel sensor drivers play LibreHardwareMonitor's role on Windows. CPU (k10temp,
@@ -37,6 +41,11 @@ enable_msi_superio_driver() {
 }
 
 build_and_install_binary() {
+  if [[ -x "$PREBUILT" ]]; then
+    echo "==> Using the included canalis binary"
+    install -D -m 755 "$PREBUILT" "$BINARY"
+    return
+  fi
   echo "==> Building (release)"
   cargo build --release --locked --manifest-path "$SOURCE_DIRECTORY/Cargo.toml"
   install -D -m 755 "$SOURCE_DIRECTORY/target/release/canalis" "$BINARY"

@@ -1,4 +1,5 @@
-# Builds and installs Canalis for the current Windows user, in place of KANALI.
+# Installs Canalis for the current Windows user, in place of KANALI. A release download includes
+# canalis.exe; in a source checkout it is built first.
 # Run from PowerShell:  powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
 $ErrorActionPreference = 'Stop'
 
@@ -42,6 +43,17 @@ function Build-Binary {
     cargo build --release --locked --manifest-path (Join-Path $SourceDirectory 'Cargo.toml') | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
     return Join-Path $targetDirectory 'release\canalis.exe'
+}
+
+function Get-Binary {
+    $prebuilt = Join-Path $SourceDirectory 'canalis.exe'
+    if (Test-Path $prebuilt) {
+        Write-Host '==> Using the included canalis.exe'
+        return $prebuilt
+    }
+    Install-BuildTools
+    Install-Rust
+    return Build-Binary
 }
 
 function Stop-RunningCanalis {
@@ -163,9 +175,7 @@ function Install-Companions {
 }
 
 Assert-WingetInstalled
-Install-BuildTools
-Install-Rust
-$builtBinary = Build-Binary
+$builtBinary = Get-Binary
 Stop-RunningCanalis
 Remove-OldPanoramaInstall
 Install-Binary $builtBinary

@@ -1,0 +1,81 @@
+# Builds Canalis for Windows and Linux when a version tag (v1.2.3) is pushed, and attaches the
+# downloads to a draft GitHub release. Each download contains the program and its install scripts.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.4.0), or a branch to only test the builds"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - run: rustup update stable --no-self-update && rustup default stable
+      - run: cargo test --release --locked
+      - run: cargo build --release --locked
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "canalis-$env:TAG-windows-x64"
+          New-Item -ItemType Directory "$name\packaging" | Out-Null
+          Copy-Item target\release\canalis.exe, install-windows.ps1, uninstall-windows.ps1, README.md $name
+          Copy-Item packaging\windows-hardware-monitor.ps1, packaging\settings-from-kanali.json "$name\packaging"
+          Compress-Archive $name "$name.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: canalis-*-windows-x64.zip
+
+  linux:
+    # The oldest supported Ubuntu, so the binary runs on older glibc as well as on Arch.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev
+      - run: rustup update stable --no-self-update && rustup default stable
+      - run: cargo test --release --locked
+      - run: cargo build --release --locked
+      - name: Package
+        run: |
+          name="canalis-$TAG-linux-x64"
+          mkdir -p "$name/packaging"
+          cp target/release/canalis install.sh uninstall.sh README.md "$name/"
+          cp packaging/70-tryx-panorama.rules packaging/canalis.desktop packaging/canalis.service packaging/settings-from-kanali.json "$name/packaging/"
+          tar -czf "$name.tar.gz" "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: canalis-*-linux-x64.tar.gz
+
+  release:
+    needs: [windows, linux]
+    if: startsWith(inputs.tag || github.ref_name, 'v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - run: sha256sum canalis-* > SHA256SUMS.txt
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" canalis-* SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "Canalis $TAG" --notes "Windows and Linux builds of Canalis $TAG."
