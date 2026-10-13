@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Builds and installs Panorama for the current user on Omarchy / Arch Linux.
+# Builds and installs Canalis for the current user on Omarchy / Arch Linux.
 set -euo pipefail
 
 SOURCE_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BINARY="$HOME/.local/bin/panorama"
-ICON="$HOME/.local/share/icons/hicolor/256x256/apps/panorama.png"
-SETTINGS_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/panorama/settings.json"
+BINARY="$HOME/.local/bin/canalis"
+ICON="$HOME/.local/share/icons/hicolor/256x256/apps/canalis.png"
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+SETTINGS_FILE="$CONFIG_HOME/canalis/settings.json"
 
 install_packages() {
   echo "==> Installing rust, adb and lm_sensors (sudo)"
@@ -30,15 +31,15 @@ enable_msi_superio_driver() {
     return 0
   fi
   echo "==> Enabling the MSI motherboard sensor driver (nct6683 force=1)"
-  echo "options nct6683 force=1" | sudo tee /etc/modprobe.d/panorama-nct6683.conf > /dev/null
-  echo "nct6683" | sudo tee /etc/modules-load.d/panorama-nct6683.conf > /dev/null
+  echo "options nct6683 force=1" | sudo tee /etc/modprobe.d/canalis-nct6683.conf > /dev/null
+  echo "nct6683" | sudo tee /etc/modules-load.d/canalis-nct6683.conf > /dev/null
   sudo modprobe nct6683 force=1 || echo "    (could not load nct6683 now; it will load after a reboot)"
 }
 
 build_and_install_binary() {
   echo "==> Building (release)"
   cargo build --release --locked --manifest-path "$SOURCE_DIRECTORY/Cargo.toml"
-  install -D -m 755 "$SOURCE_DIRECTORY/target/release/panorama" "$BINARY"
+  install -D -m 755 "$SOURCE_DIRECTORY/target/release/canalis" "$BINARY"
 }
 
 install_udev_rule() {
@@ -58,20 +59,36 @@ install_initial_settings() {
 }
 
 install_desktop_entry() {
-  echo "==> Adding Panorama to the app launcher"
-  install -D -m 644 "$SOURCE_DIRECTORY/packaging/panorama.desktop" "$HOME/.local/share/applications/panorama.desktop"
+  echo "==> Adding Canalis to the app launcher"
+  install -D -m 644 "$SOURCE_DIRECTORY/packaging/canalis.desktop" "$HOME/.local/share/applications/canalis.desktop"
   "$BINARY" icon "$ICON" >/dev/null
 }
 
 install_service() {
-  echo "==> Enabling the panorama user service"
-  install -D -m 644 "$SOURCE_DIRECTORY/packaging/panorama.service" "$HOME/.config/systemd/user/panorama.service"
+  echo "==> Enabling the canalis user service"
+  install -D -m 644 "$SOURCE_DIRECTORY/packaging/canalis.service" "$HOME/.config/systemd/user/canalis.service"
   systemctl --user daemon-reload
-  systemctl --user enable --now panorama.service
-  systemctl --user restart panorama.service
+  systemctl --user enable --now canalis.service
+  systemctl --user restart canalis.service
+}
+
+# Canalis was called Panorama before; an install under that name is replaced.
+remove_old_panorama_install() {
+  if systemctl --user is-enabled --quiet panorama.service 2> /dev/null || [[ -e "$HOME/.local/bin/panorama" ]]; then
+    echo "==> Removing the old Panorama install (now Canalis)"
+    systemctl --user disable --now panorama.service 2> /dev/null || true
+    rm -f "$HOME/.config/systemd/user/panorama.service" "$HOME/.local/bin/panorama" \
+      "$HOME/.local/share/applications/panorama.desktop" "$HOME/.local/share/icons/hicolor/256x256/apps/panorama.png"
+    sudo rm -f /etc/modprobe.d/panorama-nct6683.conf /etc/modules-load.d/panorama-nct6683.conf
+  fi
+  if [[ -f "$CONFIG_HOME/panorama/settings.json" && ! -e "$CONFIG_HOME/canalis" ]]; then
+    echo "==> Moving your settings to $CONFIG_HOME/canalis"
+    mv "$CONFIG_HOME/panorama" "$CONFIG_HOME/canalis"
+  fi
 }
 
 install_packages
+remove_old_panorama_install
 detect_hardware_sensors
 build_and_install_binary
 install_udev_rule
@@ -79,5 +96,5 @@ install_initial_settings
 install_desktop_entry
 install_service
 echo
-echo "Done. Open 'Panorama' from the launcher, or run: panorama"
-echo "Service logs: journalctl --user -u panorama -f"
+echo "Done. Open 'Canalis' from the launcher, or run: canalis"
+echo "Service logs: journalctl --user -u canalis -f"

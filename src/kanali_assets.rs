@@ -1,4 +1,4 @@
-//! Built-in theme pictures from an installed KANALI. Panorama doesn't ship TRYX's artwork; when
+//! Built-in theme pictures from an installed KANALI. Canalis doesn't ship TRYX's artwork; when
 //! KANALI is installed, its app.asar holds a poster for each theme in out/renderer/assets.
 //!
 //! An asar file is a 16-byte prefix, a JSON index of every file (size and offset), then the files.
@@ -90,7 +90,7 @@ mod tests {
         }
         archive.extend_from_slice(index.as_bytes());
         archive.extend_from_slice(&data);
-        let path = std::env::temp_dir().join(format!("panorama-test-{}.asar", std::process::id()));
+        let path = std::env::temp_dir().join(format!("canalis-test-{}.asar", std::process::id()));
         std::fs::write(&path, archive).unwrap();
         path
     }

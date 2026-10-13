@@ -40,7 +40,7 @@ impl StatusWriter {
         self.status["updated_ms"] = json!(unix_millis());
         self.status["pid"] = json!(std::process::id());
         if let Err(error) = write_atomically(&self.path, &self.status.to_string()) {
-            eprintln!("panorama: cannot write status file {}: {error}", self.path.display());
+            eprintln!("canalis: cannot write status file {}: {error}", self.path.display());
         }
     }
 }

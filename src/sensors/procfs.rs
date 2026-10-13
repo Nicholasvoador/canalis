@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn missing_files_read_as_zero() {
-        let empty = std::env::temp_dir().join("panorama-no-such-root");
+        let empty = std::env::temp_dir().join("canalis-no-such-root");
         assert_eq!(read_memory(&empty), Memory::default());
         assert_eq!(read_cpu_times(&empty), CpuTimes::default());
     }

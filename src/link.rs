@@ -217,7 +217,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn finds_panorama_tty_in_sysfs() {
-        let root = std::env::temp_dir().join(format!("panorama-sysfs-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("canalis-sysfs-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let usb_device = root.join("sys/devices/usb1/1-2");
         let interface = usb_device.join("1-2:1.0");

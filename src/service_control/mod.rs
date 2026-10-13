@@ -1,5 +1,5 @@
 //! Starting and stopping the background service, and whether it starts at login.
-//! Linux drives the systemd user unit; Windows runs `panorama service` itself and uses the
+//! Linux drives the systemd user unit; Windows runs `canalis service` itself and uses the
 //! Run registry key, the same mechanism KANALI uses for "Startup with Windows".
 
 #[cfg(not(windows))]

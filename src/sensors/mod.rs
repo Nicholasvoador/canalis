@@ -71,7 +71,7 @@ pub(crate) mod tests {
 
     impl FakeSystem {
         pub fn new(name: &str) -> Self {
-            let root = std::env::temp_dir().join(format!("panorama-fake-{name}-{}", std::process::id()));
+            let root = std::env::temp_dir().join(format!("canalis-fake-{name}-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&root);
             let system = Self { root };
             system.populate();

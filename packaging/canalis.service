@@ -1,11 +1,11 @@
 [Unit]
-Description=TRYX Panorama cooler screen (live stats, settings and tray icon)
+Description=Canalis: TRYX Panorama cooler screen (live stats, settings and tray icon)
 # Starts with the desktop session so the tray icon can appear and open the window.
 PartOf=graphical-session.target
 After=graphical-session.target
 
 [Service]
-ExecStart=%h/.local/bin/panorama service
+ExecStart=%h/.local/bin/canalis service
 # Quit from the tray icon exits cleanly and stays stopped until the next login.
 Restart=on-failure
 RestartSec=5

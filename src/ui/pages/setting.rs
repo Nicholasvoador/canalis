@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 #[cfg(windows)]
 const LOGS_HINT: &str = "The service log is service.log, next to the live status file below.";
 #[cfg(not(windows))]
-const LOGS_HINT: &str = "Service logs: journalctl --user -u panorama -f";
+const LOGS_HINT: &str = "Service logs: journalctl --user -u canalis -f";
 
 /// What the SETTING page remembers between frames.
 pub struct SettingPage {

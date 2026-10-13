@@ -4,11 +4,11 @@ use super::{ICON_SIZE, TOOLTIP, icon, open_window, quit};
 use ksni::blocking::TrayMethods;
 use ksni::menu::StandardItem;
 
-struct PanoramaTray;
+struct CanalisTray;
 
-impl ksni::Tray for PanoramaTray {
+impl ksni::Tray for CanalisTray {
     fn id(&self) -> String {
-        "panorama".into()
+        "canalis".into()
     }
 
     fn title(&self) -> String {
@@ -25,14 +25,14 @@ impl ksni::Tray for PanoramaTray {
 
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         vec![
-            StandardItem { label: "Open Panorama".into(), activate: Box::new(|_| open_window()), ..Default::default() }.into(),
+            StandardItem { label: "Open Canalis".into(), activate: Box::new(|_| open_window()), ..Default::default() }.into(),
             StandardItem { label: "Quit".into(), activate: Box::new(|_| quit()), ..Default::default() }.into(),
         ]
     }
 }
 
 pub fn run() -> Result<(), String> {
-    let _tray = PanoramaTray.spawn().map_err(|error| format!("cannot show the tray icon: {error}"))?;
+    let _tray = CanalisTray.spawn().map_err(|error| format!("cannot show the tray icon: {error}"))?;
     loop {
         std::thread::park();
     }

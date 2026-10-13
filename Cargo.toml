@@ -1,8 +1,8 @@
 [package]
-name = "panorama"
+name = "canalis"
 version = "0.3.0"
 edition = "2024"
-description = "Control app for the TRYX Panorama cooler screen on Linux and Windows (KANALI replacement)"
+description = "Canalis: control app for the TRYX Panorama cooler screen on Linux and Windows (KANALI replacement)"
 license = "MIT"
 
 [dependencies]

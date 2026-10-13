@@ -80,6 +80,6 @@ fn save(index: usize, image: &RgbaImage) {
     let file = cached_file(index);
     let saved = std::fs::create_dir_all(paths::preset_art_directory()).map_err(|error| error.to_string()).and_then(|()| image.save(&file).map_err(|error| error.to_string()));
     if let Err(error) = saved {
-        eprintln!("panorama: cannot save {}: {error}", file.display());
+        eprintln!("canalis: cannot save {}: {error}", file.display());
     }
 }

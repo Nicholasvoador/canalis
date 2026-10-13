@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=Panorama
+Name=Canalis
 GenericName=Cooler screen control
 Comment=Configure the TRYX Panorama cooler screen
-Exec=panorama
-Icon=panorama
+Exec=canalis
+Icon=canalis
 Terminal=false
 Categories=Settings;HardwareSettings;
-StartupWMClass=panorama
+StartupWMClass=canalis

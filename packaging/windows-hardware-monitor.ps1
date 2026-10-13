@@ -1,7 +1,7 @@
 # Run elevated by install-windows.ps1 (one UAC prompt). Sets up LibreHardwareMonitor, which
-# Panorama reads temperatures, fan speeds and CPU power from:
+# Canalis reads temperatures, fan speeds and CPU power from:
 #   - installs PawnIO, the signed kernel driver LibreHardwareMonitor reads sensors through;
-#   - turns on its web server (Panorama reads http://127.0.0.1:8085/data.json), minimised to the tray;
+#   - turns on its web server (Canalis reads http://127.0.0.1:8085/data.json), minimised to the tray;
 #   - starts it at login with administrator rights via a scheduled task, and starts it now.
 param(
     [Parameter(Mandatory)] [string]$Executable,
@@ -9,7 +9,9 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-$TaskName = 'Panorama - LibreHardwareMonitor'
+$TaskName = 'Canalis - LibreHardwareMonitor'
+# The task's name from before the app was renamed from Panorama.
+$OldTaskName = 'Panorama - LibreHardwareMonitor'
 $Settings = [ordered]@{
     runWebServerMenuItem = 'true'
     listenerPort         = '8085'
@@ -58,6 +60,7 @@ function Register-LoginTask {
     $principal = New-ScheduledTaskPrincipal -UserId $UserName -LogonType Interactive -RunLevel Highest
     $options = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $options -Force | Out-Null
+    Unregister-ScheduledTask -TaskName $OldTaskName -Confirm:$false -ErrorAction SilentlyContinue
 }
 
 try {

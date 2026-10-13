@@ -37,7 +37,7 @@ struct Notice {
     shown_at: Instant,
 }
 
-pub struct PanoramaApp {
+pub struct CanalisApp {
     page: Page,
     home_tab: HomeTab,
     panorama_page: PanoramaPage,
@@ -50,7 +50,7 @@ pub struct PanoramaApp {
     notice: Option<Notice>,
 }
 
-impl PanoramaApp {
+impl CanalisApp {
     pub fn new(store: SettingsStore, status_path: PathBuf, start_page: StartPage) -> Self {
         let (page, home_tab, panorama_tab) = match start_page {
             StartPage::Home => (Page::Home, HomeTab::Dashboard, PanoramaTab::Presets),
@@ -149,7 +149,7 @@ impl PanoramaApp {
     }
 }
 
-impl eframe::App for PanoramaApp {
+impl eframe::App for CanalisApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         ui.ctx().request_repaint_after(REFRESH_INTERVAL);
         self.status.refresh();
@@ -166,7 +166,7 @@ fn brand(ui: &mut Ui) {
         ui.add(egui::Image::new(icons::LOGO).tint(BLACK).fit_to_exact_size(vec2(LOGO_SIZE, LOGO_SIZE)));
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 0.0;
-            ui.label(egui::RichText::new("PANORAMA").family(super::theme::bold_family()).size(23.0).color(BLACK));
+            ui.label(egui::RichText::new("CANALIS").family(super::theme::bold_family()).size(23.0).color(BLACK));
             ui.label(egui::RichText::new("Cooler screen control").size(12.0).color(BLACK.gamma_multiply(0.7)));
         });
     });

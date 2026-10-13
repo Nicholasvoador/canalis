@@ -1,4 +1,4 @@
-//! User settings (~/.config/panorama/settings.json), edited by the UI and the
+//! User settings (~/.config/canalis/settings.json), edited by the UI and the
 //! command line and applied to the screen by the background service.
 
 use serde::{Deserialize, Serialize};
@@ -347,7 +347,7 @@ pub(crate) mod tests {
     pub const KANALI_SETTINGS: &str = include_str!("../packaging/settings-from-kanali.json");
 
     pub fn temporary_path(name: &str) -> PathBuf {
-        let directory = std::env::temp_dir().join(format!("panorama-test-{name}-{}", std::process::id()));
+        let directory = std::env::temp_dir().join(format!("canalis-test-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&directory);
         directory.join("settings.json")
     }

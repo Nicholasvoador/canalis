@@ -1,13 +1,17 @@
-# Builds and installs Panorama for the current Windows user, in place of KANALI.
+# Builds and installs Canalis for the current Windows user, in place of KANALI.
 # Run from PowerShell:  powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
 $ErrorActionPreference = 'Stop'
 
 $SourceDirectory = $PSScriptRoot
-$InstallDirectory = Join-Path $env:LOCALAPPDATA 'Programs\Panorama'
-$Binary = Join-Path $InstallDirectory 'panorama.exe'
-$SettingsFile = Join-Path $env:APPDATA 'panorama\settings.json'
+$InstallDirectory = Join-Path $env:LOCALAPPDATA 'Programs\Canalis'
+$Binary = Join-Path $InstallDirectory 'canalis.exe'
+$SettingsFile = Join-Path $env:APPDATA 'canalis\settings.json'
 $RunKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-$Shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Panorama.lnk'
+$Shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Canalis.lnk'
+# Canalis was called Panorama before; an install under that name is replaced.
+$OldInstallDirectory = Join-Path $env:LOCALAPPDATA 'Programs\Panorama'
+$OldSettingsDirectory = Join-Path $env:APPDATA 'panorama'
+$OldShortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Panorama.lnk'
 
 # Rust on Windows links with Microsoft's C++ tools.
 function Install-BuildTools {
@@ -37,12 +41,25 @@ function Build-Binary {
     $targetDirectory = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $SourceDirectory 'target' }
     cargo build --release --locked --manifest-path (Join-Path $SourceDirectory 'Cargo.toml') | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'cargo build failed' }
-    return Join-Path $targetDirectory 'release\panorama.exe'
+    return Join-Path $targetDirectory 'release\canalis.exe'
 }
 
-function Stop-RunningPanorama {
-    Get-Process | Where-Object { $_.Path -like "$InstallDirectory\*" } | Stop-Process -Force
+function Stop-RunningCanalis {
+    Get-Process | Where-Object { $_.Path -like "$InstallDirectory\*" -or $_.Path -like "$OldInstallDirectory\*" } | Stop-Process -Force
     Start-Sleep -Milliseconds 500
+}
+
+function Remove-OldPanoramaInstall {
+    if (Test-Path $OldInstallDirectory) {
+        Write-Host '==> Removing the old Panorama install (now Canalis)'
+        Remove-Item $OldInstallDirectory -Recurse -Force
+    }
+    Remove-ItemProperty $RunKey -Name Panorama -ErrorAction SilentlyContinue
+    Remove-Item $OldShortcut -ErrorAction SilentlyContinue
+    if ((Test-Path (Join-Path $OldSettingsDirectory 'settings.json')) -and -not (Test-Path (Split-Path $SettingsFile))) {
+        Write-Host "==> Moving your settings to $(Split-Path $SettingsFile)"
+        Move-Item $OldSettingsDirectory (Split-Path $SettingsFile)
+    }
 }
 
 function Install-Binary([string]$BuiltBinary) {
@@ -51,7 +68,7 @@ function Install-Binary([string]$BuiltBinary) {
     Copy-Item $BuiltBinary $Binary -Force
 }
 
-# KANALI and Panorama cannot share the screen's serial port, so KANALI stops starting with Windows.
+# KANALI and Canalis cannot share the screen's serial port, so KANALI stops starting with Windows.
 function Disable-Kanali {
     if (Get-ItemProperty $RunKey -Name KANALI -ErrorAction SilentlyContinue) {
         Write-Host '==> Turning off KANALI''s start with Windows (turn it back on in KANALI''s settings to undo)'
@@ -79,7 +96,7 @@ function Install-InitialSettings {
 }
 
 function Install-StartMenuShortcut {
-    Write-Host '==> Adding Panorama to the Start menu'
+    Write-Host '==> Adding Canalis to the Start menu'
     $link = (New-Object -ComObject WScript.Shell).CreateShortcut($Shortcut)
     $link.TargetPath = $Binary
     $link.WorkingDirectory = $InstallDirectory
@@ -89,10 +106,10 @@ function Install-StartMenuShortcut {
 
 function Enable-LoginStart {
     Write-Host '==> Starting the service when you log in'
-    Set-ItemProperty $RunKey -Name Panorama -Value "`"$Binary`" service"
+    Set-ItemProperty $RunKey -Name Canalis -Value "`"$Binary`" service"
 }
 
-function Start-PanoramaService {
+function Start-CanalisService {
     Write-Host '==> Starting the service'
     Start-Process $Binary -ArgumentList 'service' -WindowStyle Hidden
 }
@@ -149,13 +166,14 @@ Assert-WingetInstalled
 Install-BuildTools
 Install-Rust
 $builtBinary = Build-Binary
-Stop-RunningPanorama
+Stop-RunningCanalis
+Remove-OldPanoramaInstall
 Install-Binary $builtBinary
 Disable-Kanali
 Install-InitialSettings
 Install-StartMenuShortcut
 Enable-LoginStart
 Install-Companions
-Start-PanoramaService
+Start-CanalisService
 Write-Host ''
-Write-Host 'Done. Open Panorama from the Start menu.'
+Write-Host 'Done. Open Canalis from the Start menu.'

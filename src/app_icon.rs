@@ -1,4 +1,4 @@
-//! The app icon (window, taskbar, tray and panorama.exe): the sidebar's logo, assets/icons/logo.svg,
+//! The app icon (window, taskbar, tray and canalis.exe): the sidebar's logo, assets/icons/logo.svg,
 //! in black on a lime rounded square.
 
 use resvg::tiny_skia::{Pixmap, Transform};

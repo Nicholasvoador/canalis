@@ -1,4 +1,4 @@
-//! Windows: the service is this same executable run as `panorama.exe service` without a window.
+//! Windows: the service is this same executable run as `canalis.exe service` without a window.
 //! It is found again through the process ID it writes into the status file, and started at
 //! login by a value under HKCU\...\CurrentVersion\Run.
 
@@ -10,11 +10,11 @@ use winreg::RegKey;
 use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_WRITE};
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-const RUN_VALUE: &str = "Panorama";
-const EXECUTABLE_PREFIX: &str = "panorama";
+const RUN_VALUE: &str = "Canalis";
+const EXECUTABLE_PREFIX: &str = "canalis";
 
 pub fn start() -> Result<(), String> {
-    let executable = std::env::current_exe().map_err(|error| format!("cannot find panorama.exe: {error}"))?;
+    let executable = std::env::current_exe().map_err(|error| format!("cannot find canalis.exe: {error}"))?;
     hidden_command(executable)
         .arg("service")
         .stdin(Stdio::null())
@@ -30,7 +30,7 @@ pub fn stop() -> Result<(), String> {
     let pid = Pid::from_u32(service_process_id().ok_or("the service is not running")?);
     let mut system = System::new();
     system.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
-    let process = system.process(pid).filter(|process| is_panorama(&process.name().to_string_lossy())).ok_or("the service is not running")?;
+    let process = system.process(pid).filter(|process| is_canalis(&process.name().to_string_lossy())).ok_or("the service is not running")?;
     if !process.kill() {
         return Err("cannot stop the service".into());
     }
@@ -62,7 +62,7 @@ fn run_key() -> Result<RegKey, String> {
 }
 
 fn login_command() -> Result<String, String> {
-    let executable = std::env::current_exe().map_err(|error| format!("cannot find panorama.exe: {error}"))?;
+    let executable = std::env::current_exe().map_err(|error| format!("cannot find canalis.exe: {error}"))?;
     Ok(format!("\"{}\" service", executable.display()))
 }
 
@@ -71,6 +71,6 @@ fn service_process_id() -> Option<u32> {
     status["pid"].as_u64().map(|pid| pid as u32)
 }
 
-fn is_panorama(process_name: &str) -> bool {
+fn is_canalis(process_name: &str) -> bool {
     process_name.to_lowercase().starts_with(EXECUTABLE_PREFIX)
 }

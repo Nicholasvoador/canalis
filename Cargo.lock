@@ -671,6 +671,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "canalis"
+version = "0.3.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "eframe",
+ "egui_extras",
+ "image",
+ "ksni",
+ "resvg",
+ "rfd",
+ "serde",
+ "serde_json",
+ "serialport",
+ "sysinfo",
+ "tray-icon",
+ "windows-sys 0.60.2",
+ "winreg",
+ "winresource",
+]
+
+[[package]]
 name = "cc"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2995,28 +3017,6 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
-]
-
-[[package]]
-name = "panorama"
-version = "0.3.0"
-dependencies = [
- "chrono",
- "clap",
- "eframe",
- "egui_extras",
- "image",
- "ksni",
- "resvg",
- "rfd",
- "serde",
- "serde_json",
- "serialport",
- "sysinfo",
- "tray-icon",
- "windows-sys 0.60.2",
- "winreg",
- "winresource",
 ]
 
 [[package]]

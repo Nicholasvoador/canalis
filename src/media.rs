@@ -25,7 +25,7 @@ pub struct AdbScreen {
 
 impl AdbScreen {
     pub fn new() -> Self {
-        let adb = std::env::var_os("PANORAMA_ADB").map(PathBuf::from).unwrap_or_else(default_adb);
+        let adb = std::env::var_os("CANALIS_ADB").map(PathBuf::from).unwrap_or_else(default_adb);
         Self { adb, local_directory: paths::media_directory(), serial: OnceLock::new() }
     }
 
@@ -59,7 +59,7 @@ impl AdbScreen {
     fn keep_local_copy(&self, local_file: &Path, name: &str) {
         let copied = std::fs::create_dir_all(&self.local_directory).and_then(|()| std::fs::copy(local_file, self.local_directory.join(name)));
         if let Err(error) = copied {
-            eprintln!("panorama: cannot keep a preview copy of {name}: {error}");
+            eprintln!("canalis: cannot keep a preview copy of {name}: {error}");
         }
     }
 
@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn rejects_unsupported_type() {
-        let path = std::env::temp_dir().join(format!("panorama-media-{}.txt", std::process::id()));
+        let path = std::env::temp_dir().join(format!("canalis-media-{}.txt", std::process::id()));
         std::fs::write(&path, "x").unwrap();
         assert!(require_supported(&path).unwrap_err().contains("unsupported"));
     }

@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime};
 
 const RECONNECT_DELAY: Duration = Duration::from_secs(3);
 
-pub struct PanoramaService {
+pub struct ScreenService {
     store: SettingsStore,
     port_override: Option<String>,
     status: StatusWriter,
@@ -23,7 +23,7 @@ pub struct PanoramaService {
     update_interval: Duration,
 }
 
-impl PanoramaService {
+impl ScreenService {
     pub fn new(store: SettingsStore, status: StatusWriter, port_override: Option<String>) -> Self {
         Self { store, port_override, status, spec: read_spec(), monitor: SystemMonitor::new(), update_interval: Duration::from_secs(1) }
     }
@@ -31,7 +31,7 @@ impl PanoramaService {
     pub fn run_forever(&mut self) -> ! {
         loop {
             if let Err(error) = self.run_session() {
-                eprintln!("panorama: screen unavailable ({error}); retrying in {}s", RECONNECT_DELAY.as_secs());
+                eprintln!("canalis: screen unavailable ({error}); retrying in {}s", RECONNECT_DELAY.as_secs());
                 self.status.disconnected(&error.to_string());
                 std::thread::sleep(RECONNECT_DELAY);
             }
@@ -44,7 +44,7 @@ impl PanoramaService {
             None => find_serial_port()?,
         };
         let device = open_serial_device(&port_name)?;
-        eprintln!("panorama: connected to screen on {port_name}");
+        eprintln!("canalis: connected to screen on {port_name}");
         self.stream(PanoramaLink::new(device), &port_name)
     }
 
@@ -68,14 +68,14 @@ impl PanoramaService {
         let settings = match self.store.load().and_then(|settings| settings.validate().map(|()| settings)) {
             Ok(settings) => settings,
             Err(error) => {
-                eprintln!("panorama: ignoring invalid settings file: {error}");
+                eprintln!("canalis: ignoring invalid settings file: {error}");
                 return Ok(modified_time);
             }
         };
         self.update_interval = Duration::from_secs_f64(settings.update_interval_seconds);
         link.request("POST", "config", Some(&build_device_config(&settings, &self.spec)), DEFAULT_TIMEOUT)?;
         link.request("POST", "waterBlockScreen", Some(&json!({ "enable": settings.enable })), DEFAULT_TIMEOUT)?;
-        eprintln!("panorama: applied settings (theme={}, brightness={})", settings.theme, settings.brightness);
+        eprintln!("canalis: applied settings (theme={}, brightness={})", settings.theme, settings.brightness);
         Ok(modified_time)
     }
 }

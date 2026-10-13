@@ -1,4 +1,4 @@
-//! Command line: `panorama` opens the window; subcommands change settings or run the service.
+//! Command line: `canalis` opens the window; subcommands change settings or run the service.
 
 use crate::media::AdbScreen;
 use crate::settings::{ALIGNMENTS, CELSIUS, CUSTOMIZATION, FAHRENHEIT, FIXED_MODE, PRESETS, SMART_MODE, Settings, SettingsStore};
@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "panorama", version, about = "Control the TRYX Panorama cooler screen (run without arguments for the window)")]
+#[command(name = "canalis", version, about = "Canalis: control the TRYX Panorama cooler screen (run without arguments for the window)")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Command>,
@@ -95,7 +95,7 @@ pub fn run_settings_command(command: Command, store: &SettingsStore) -> Result<S
 
 fn presets_listing() -> String {
     let presets: Vec<String> = PRESETS.iter().enumerate().map(|(index, name)| format!("{}  {name}", index + 1)).collect();
-    presets.join("\n") + "\ncustom  your own media (panorama custom FILE)"
+    presets.join("\n") + "\ncustom  your own media (canalis custom FILE)"
 }
 
 fn update(store: &SettingsStore, change: impl FnOnce(&mut Settings) -> Result<(), String>) -> Result<(), String> {
@@ -125,7 +125,7 @@ fn theme_from_choice(choice: &str) -> Result<String, String> {
     }
     match choice.parse::<usize>() {
         Ok(number) if (1..=PRESETS.len()).contains(&number) => Ok(PRESETS[number - 1].into()),
-        _ => Err(format!("choose 1-{} or 'custom' (see: panorama presets)", PRESETS.len())),
+        _ => Err(format!("choose 1-{} or 'custom' (see: canalis presets)", PRESETS.len())),
     }
 }
 
@@ -161,7 +161,7 @@ mod tests {
     use crate::settings::tests::temporary_path;
 
     fn run(store: &SettingsStore, arguments: &[&str]) -> Result<String, String> {
-        let cli = Cli::try_parse_from(std::iter::once("panorama").chain(arguments.iter().copied())).map_err(|error| error.to_string())?;
+        let cli = Cli::try_parse_from(std::iter::once("canalis").chain(arguments.iter().copied())).map_err(|error| error.to_string())?;
         run_settings_command(cli.command.unwrap(), store)
     }
 

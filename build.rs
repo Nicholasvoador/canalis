@@ -1,4 +1,4 @@
-//! Gives panorama.exe the app icon, so Explorer, the Start menu and pinned taskbar buttons show it.
+//! Gives canalis.exe the app icon, so Explorer, the Start menu and pinned taskbar buttons show it.
 
 #[allow(dead_code)]
 #[path = "src/app_icon.rs"]
@@ -16,12 +16,12 @@ fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;
     }
-    let icon_file = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR")).join("panorama.ico");
-    write_icon(&icon_file).expect("cannot write panorama.ico");
+    let icon_file = PathBuf::from(std::env::var_os("OUT_DIR").expect("cargo sets OUT_DIR")).join("canalis.ico");
+    write_icon(&icon_file).expect("cannot write canalis.ico");
     winresource::WindowsResource::new()
         .set_icon(&icon_file.to_string_lossy())
         .compile()
-        .expect("cannot embed the icon in panorama.exe (needs the Windows SDK's rc.exe)");
+        .expect("cannot embed the icon in canalis.exe (needs the Windows SDK's rc.exe)");
 }
 
 fn write_icon(path: &Path) -> image::ImageResult<()> {

@@ -6,7 +6,7 @@ use tray_icon::{Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEv
 use windows_sys::Win32::UI::WindowsAndMessaging::{DispatchMessageW, GetMessageW, MSG, TranslateMessage};
 
 pub fn run() -> Result<(), String> {
-    let open_item = MenuItem::new("Open Panorama", true, None);
+    let open_item = MenuItem::new("Open Canalis", true, None);
     let quit_item = MenuItem::new("Quit", true, None);
     let menu = Menu::new();
     menu.append_items(&[&open_item, &quit_item]).map_err(|error| format!("cannot build the tray menu: {error}"))?;

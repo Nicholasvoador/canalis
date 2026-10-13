@@ -1,8 +1,8 @@
-//! Linux: the `panorama.service` systemd user unit, enabled to start at login.
+//! Linux: the `canalis.service` systemd user unit, enabled to start at login.
 
 use crate::hidden_command::hidden_command;
 
-const UNIT: &str = "panorama.service";
+const UNIT: &str = "canalis.service";
 
 pub fn start() -> Result<(), String> {
     systemctl(&["start", UNIT]).map(drop)
