@@ -77,7 +77,8 @@ function Remove-OldPanoramaInstall {
 function Install-Binary([string]$BuiltBinary) {
     Write-Host "==> Installing to $InstallDirectory"
     New-Item -ItemType Directory -Force $InstallDirectory | Out-Null
-    Copy-Item $BuiltBinary $Binary -Force
+    # The setup exe has already put canalis.exe in place and runs this script from there.
+    if ((Resolve-Path $BuiltBinary).Path -ine $Binary) { Copy-Item $BuiltBinary $Binary -Force }
 }
 
 # KANALI and Canalis cannot share the screen's serial port, so KANALI stops starting with Windows.

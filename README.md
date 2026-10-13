@@ -14,11 +14,7 @@ A lightweight replacement for TRYX **KANALI** that controls the **TRYX Panorama*
 
 Download the latest build from [Releases](https://github.com/sallen2/canalis/releases/latest).
 
-**Windows:** unzip `canalis-…-windows-x64.zip` and run this from PowerShell in that folder:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
-```
+**Windows:** run `canalis-setup-….exe`.
 
 **Linux (Arch / Omarchy):** extract `canalis-…-linux-x64.tar.gz` and run:
 
@@ -26,7 +22,7 @@ powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
 ./install.sh
 ```
 
-The installer sets up everything Canalis needs, turns off KANALI's start at login, and starts Canalis when you log in. Run `uninstall-windows.ps1` or `uninstall.sh` to remove it; your settings are kept.
+The installer sets up everything Canalis needs, turns off KANALI's start at login, and starts Canalis when you log in. Uninstall it from Windows' **Installed apps**, or with `uninstall.sh` on Linux; your settings are kept.
 
 ## Use
 

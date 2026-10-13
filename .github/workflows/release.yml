@@ -1,5 +1,6 @@
 # Builds Canalis for Windows and Linux when a version tag (v1.2.3) is pushed, and attaches the
-# downloads to a draft GitHub release. Each download contains the program and its install scripts.
+# downloads to a draft GitHub release: a setup exe for Windows, and for Linux a tar.gz with the
+# program and its install scripts.
 name: Release
 
 on:
@@ -28,18 +29,21 @@ jobs:
       - run: rustup update stable --no-self-update && rustup default stable
       - run: cargo test --release --locked
       - run: cargo build --release --locked
-      - name: Package
+      - run: choco install innosetup --no-progress -y
+      - name: Build the setup exe
         shell: pwsh
         run: |
-          $name = "canalis-$env:TAG-windows-x64"
-          New-Item -ItemType Directory "$name\packaging" | Out-Null
-          Copy-Item target\release\canalis.exe, install-windows.ps1, uninstall-windows.ps1, README.md $name
-          Copy-Item packaging\windows-hardware-monitor.ps1, packaging\settings-from-kanali.json "$name\packaging"
-          Compress-Archive $name "$name.zip"
+          New-Item -ItemType Directory stage\packaging | Out-Null
+          Copy-Item target\release\canalis.exe, install-windows.ps1, uninstall-windows.ps1 stage
+          Copy-Item packaging\windows-hardware-monitor.ps1, packaging\settings-from-kanali.json stage\packaging
+          $icon = (Get-ChildItem target\release\build\canalis-*\out\canalis.ico | Select-Object -First 1).FullName
+          $version = $env:TAG.TrimStart('v')
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "/DSourceDir=$PWD\stage" "/DIconFile=$icon" "/DOutputDir=$PWD" packaging\windows-installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup could not build the installer' }
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: canalis-*-windows-x64.zip
+          path: canalis-setup-*.exe
 
   linux:
     # The oldest supported Ubuntu, so the binary runs on older glibc as well as on Arch.

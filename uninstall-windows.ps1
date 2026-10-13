@@ -1,5 +1,9 @@
 # Removes Canalis for the current Windows user. Your settings in %APPDATA%\canalis are kept,
 # and so are LibreHardwareMonitor, PawnIO and adb (other apps may use them).
+param(
+    # Set by the setup exe's uninstaller, which runs from the program's folder and removes it itself.
+    [switch]$FromUninstaller
+)
 $ErrorActionPreference = 'Stop'
 
 $InstallDirectory = Join-Path $env:LOCALAPPDATA 'Programs\Canalis'
@@ -8,10 +12,10 @@ $Shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Canalis.lnk'
 $HardwareMonitorTask = 'Canalis - LibreHardwareMonitor'
 
 Remove-ItemProperty $RunKey -Name Canalis -ErrorAction SilentlyContinue
-Get-Process | Where-Object { $_.Path -like "$InstallDirectory\*" } | Stop-Process -Force
+Get-Process canalis -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$InstallDirectory\*" } | Stop-Process -Force
 Start-Sleep -Milliseconds 500
 Remove-Item $Shortcut -ErrorAction SilentlyContinue
-Remove-Item $InstallDirectory -Recurse -Force -ErrorAction SilentlyContinue
+if (-not $FromUninstaller) { Remove-Item $InstallDirectory -Recurse -Force -ErrorAction SilentlyContinue }
 if (Get-ScheduledTask -TaskName $HardwareMonitorTask -ErrorAction SilentlyContinue) {
     Write-Host 'Removing the LibreHardwareMonitor login task (approve the administrator prompt)'
     try {
