@@ -12,7 +12,7 @@ use crate::ui::fan_curve::fan_curve_editor;
 use crate::ui::format::field_title;
 use crate::ui::screen_preview::{parse_hex_color, screen_preview};
 use crate::ui::theme::{BORDER, LIME, MUTED};
-use crate::ui::widgets::{bold, card, muted, page_header, pill, pill_button, primary_button, segmented, setting_row, tabs, toggle};
+use crate::ui::widgets::{bold, card, muted, page_header, page_scroll, pill, pill_button, primary_button, segmented, setting_row, tabs, toggle};
 use eframe::egui::style::HandleShape;
 use eframe::egui::{self, Align2, Color32, Sense, Stroke, StrokeKind, Ui, vec2};
 
@@ -43,7 +43,7 @@ pub fn show(ui: &mut Ui, state: &mut PanoramaPage, page: &mut PageContext) {
     page_header(ui, "PANORAMA");
     let options = [(PanoramaTab::Presets, "Pre-set"), (PanoramaTab::Customization, "Customization"), (PanoramaTab::Screen, "Screen"), (PanoramaTab::Fan, "Fan")];
     tabs(ui, &mut state.tab, &options);
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| match state.tab {
+    page_scroll(ui, |ui| match state.tab {
         PanoramaTab::Presets => preset_tab(ui, &mut state.carousel, page),
         PanoramaTab::Customization => customization_tab(ui, page),
         PanoramaTab::Screen => screen_settings(ui, &mut page.editor.settings),

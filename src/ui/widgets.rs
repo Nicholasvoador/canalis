@@ -3,6 +3,18 @@
 use super::theme::{self, BORDER, CARD, CARD_RADIUS, LIME, MUTED, TEXT};
 use eframe::egui::{self, Align, Color32, CornerRadius, Layout, Margin, Response, RichText, Rect, Sense, Stroke, Ui, UiBuilder, pos2, vec2};
 
+/// How far a page's scroll bar sits out in the window's right margin, clear of the cards.
+const SCROLL_BAR_GUTTER: i8 = 24;
+
+/// Scrolls a page's content, with the scroll bar out in the right margin instead of over the cards.
+pub fn page_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    let area = ui.available_rect_before_wrap();
+    let widened = area.with_max_x(area.right() + SCROLL_BAR_GUTTER as f32);
+    let mut margin = ui.spacing().scroll.content_margin;
+    margin.right += SCROLL_BAR_GUTTER;
+    ui.scope_builder(UiBuilder::new().max_rect(widened), |ui| egui::ScrollArea::vertical().auto_shrink(false).content_margin(margin).show(ui, add_contents).inner).inner
+}
+
 pub fn bold(text: impl Into<String>, size: f32) -> RichText {
     RichText::new(text).family(theme::bold_family()).size(size).color(TEXT)
 }

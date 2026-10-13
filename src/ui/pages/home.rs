@@ -7,7 +7,7 @@ use crate::ui::format;
 use crate::ui::icons::{self, Icon};
 use crate::ui::network_history::NetworkHistory;
 use crate::ui::theme::{self, CARD_RAISED, DANGER, DOWNLOAD_GREEN, LIME, MUTED, OK, ORANGE, TEXT, UPLOAD_BLUE};
-use crate::ui::widgets::{bold, card, card_at, card_content_height, divider, info_line, muted, page_header, status_dot, tabs};
+use crate::ui::widgets::{bold, card, card_at, card_content_height, divider, info_line, muted, page_header, page_scroll, status_dot, tabs};
 use eframe::egui::{self, Align, Align2, Color32, FontId, Id, Layout, Painter, Pos2, Rect, Sense, Ui, pos2, vec2};
 use std::time::Duration;
 
@@ -42,7 +42,7 @@ pub fn show(ui: &mut Ui, tab: &mut HomeTab, page: &mut PageContext) {
     ui.add_space(18.0);
     divider(ui);
     ui.add_space(CARD_GAP);
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| match tab {
+    page_scroll(ui, |ui| match tab {
         HomeTab::Dashboard => dashboard(ui, page),
         HomeTab::Specifications => specifications(ui, page),
     });

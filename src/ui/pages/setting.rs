@@ -3,7 +3,7 @@
 use super::PageContext;
 use crate::service_control::{self, ServiceAction};
 use crate::ui::theme::{DANGER, LIME, OK};
-use crate::ui::widgets::{bold, card, info_line, muted, page_header, primary_button, secondary_button, setting_row, status_dot, toggle};
+use crate::ui::widgets::{bold, card, info_line, muted, page_header, page_scroll, primary_button, secondary_button, setting_row, status_dot, toggle};
 use eframe::egui::{self, RichText, Ui};
 use std::path::{Path, PathBuf};
 
@@ -33,7 +33,7 @@ impl SettingPage {
 
 pub fn show(ui: &mut Ui, state: &mut SettingPage, page: &mut PageContext) {
     page_header(ui, "SETTING");
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
+    page_scroll(ui, |ui| {
         service_card(ui, state, page);
         ui.add_space(14.0);
         #[cfg(windows)]
