@@ -74,6 +74,7 @@ Files:
 | Settings | `~/.config/panorama/settings.json` | `%APPDATA%\panorama\settings.json` |
 | Live status (service → window) | `$XDG_RUNTIME_DIR/panorama/status.json` | `%LOCALAPPDATA%\panorama\status.json` |
 | Service log | `journalctl --user -u panorama -f` | `%LOCALAPPDATA%\panorama\service.log` |
+| Copies of your media, for the preview | `~/.config/panorama/media/` | `%APPDATA%\panorama\media\` |
 
 ## How it works
 
@@ -98,6 +99,8 @@ Each serial frame looks like this:
 
 The payload is a text message like an HTTP request: `POST config 1\r\nSeqNumber=2\r\nDate=…\r\nContentType=json\r\nContentLength=606\r\n\r\n{…}`. The screen answers each message with `1 200` and `AckNumber=SeqNumber+1`.
 
+Custom media is copied to `/sdcard/pcMedia/` over adb, and the screen stacks the live stats from the bottom up (the first one chosen is drawn lowest). KANALI previews media from its own copy (`%APPDATA%\kanali\panorama\media`, with a PNG thumbnail for videos), and crops each file to 2:1, or to 1:1 for its split-screen mode, before sending it. Panorama keeps its own copies the same way, and pulls a file back from the screen the first time it needs one for the preview.
+
 The startup sequence copies KANALI: `POST conn`, then `POST config` (all settings as one JSON body), then `POST waterBlockScreen`. After that the service sends `STATE all` with a hardware snapshot every second, and re-sends `config` whenever the settings file changes. The tests in `src/protocol.rs` check the encoder against real frames captured from the screen.
 
 KANALI reads its stats through the HWiNFO SDK: `lib\BYMonitor64.dll` is HWiNFO's own client library (8.22, signed by REALiX), loaded by a small native addon. The stats keep HWiNFO's sensor names and units, e.g. `Current DL rate` in KB/s and drive `Read Rate` in MB/s. That SDK is licensed to TRYX and Windows-only, so Panorama reads the same values itself, in the same units:
@@ -120,6 +123,7 @@ KANALI reads its stats through the HWiNFO SDK: `lib\BYMonitor64.dll` is HWiNFO's
 On the real screen (firmware V1.0.11):
 - **Windows:** installed with `install-windows.ps1` in place of KANALI; the installer sets up adb and LibreHardwareMonitor (with PawnIO) on its own; the service starts hidden with its tray icon, connects on COM3, applies settings and streams live CPU, memory, disk, network and GPU stats plus CPU, motherboard and NVMe temperatures, CPU power and fan speeds; start at login is registered; command-line output works.
 - Brightness changes made from the command line reach the screen within a second, and invalid values are refused and not saved.
+- The Theme preview pulls the GIF already on the screen over adb and plays it, with the stats in the same order and layout as the screen.
 
 `cargo test` runs the unit tests on Windows, and the code type-checks for `x86_64-unknown-linux-gnu`.
 

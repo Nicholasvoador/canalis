@@ -1,6 +1,8 @@
 //! Custom images and videos live on the screen in /sdcard/pcMedia, pushed over ADB.
+//! A local copy of each file is kept for the window's preview.
 
 use crate::hidden_command::hidden_command;
+use crate::paths;
 use std::path::{Path, PathBuf};
 
 const DEVICE_MEDIA_DIRECTORY: &str = "/sdcard/pcMedia";
@@ -13,11 +15,13 @@ const ADB_INSTALL_HINT: &str = "install it with: sudo pacman -S android-tools";
 
 pub struct AdbMediaLibrary {
     adb: PathBuf,
+    local_directory: PathBuf,
 }
 
 impl AdbMediaLibrary {
     pub fn new() -> Self {
-        Self { adb: std::env::var_os("PANORAMA_ADB").map(PathBuf::from).unwrap_or_else(default_adb) }
+        let adb = std::env::var_os("PANORAMA_ADB").map(PathBuf::from).unwrap_or_else(default_adb);
+        Self { adb, local_directory: paths::media_directory() }
     }
 
     /// Copies a file to the screen and returns the name it has there.
@@ -26,7 +30,27 @@ impl AdbMediaLibrary {
         let name = device_file_name(local_file);
         self.run(&["shell", "mkdir", "-p", DEVICE_MEDIA_DIRECTORY])?;
         self.run(&["push", &local_file.to_string_lossy(), &format!("{DEVICE_MEDIA_DIRECTORY}/{name}")])?;
+        self.keep_local_copy(local_file, &name);
         Ok(name)
+    }
+
+    /// The local copy of a file on the screen, pulled from the screen the first time.
+    pub fn local_copy(&self, name: &str) -> Result<PathBuf, String> {
+        let local_file = self.local_directory.join(name);
+        if local_file.is_file() {
+            return Ok(local_file);
+        }
+        std::fs::create_dir_all(&self.local_directory).map_err(|error| format!("{}: {error}", self.local_directory.display()))?;
+        self.run(&["pull", &format!("{DEVICE_MEDIA_DIRECTORY}/{name}"), &local_file.to_string_lossy()])?;
+        Ok(local_file)
+    }
+
+    /// The preview is a convenience, so a failed copy doesn't fail the upload.
+    fn keep_local_copy(&self, local_file: &Path, name: &str) {
+        let copied = std::fs::create_dir_all(&self.local_directory).and_then(|()| std::fs::copy(local_file, self.local_directory.join(name)));
+        if let Err(error) = copied {
+            eprintln!("panorama: cannot keep a preview copy of {name}: {error}");
+        }
     }
 
     fn run(&self, arguments: &[&str]) -> Result<String, String> {
@@ -42,14 +66,21 @@ impl AdbMediaLibrary {
     }
 }
 
-/// adb from PATH, or on Windows where winget puts it (PATH only picks that up after logging in again).
+/// adb from where winget puts it on Windows (PATH only picks that up after logging in again), or from PATH.
 fn default_adb() -> PathBuf {
     adb_install_locations().into_iter().find(|path| path.is_file()).unwrap_or_else(|| PathBuf::from("adb"))
 }
 
 #[cfg(windows)]
 fn adb_install_locations() -> Vec<PathBuf> {
-    std::env::var_os("LOCALAPPDATA").map(|local| PathBuf::from(local).join(r"Microsoft\WinGet\Links\adb.exe")).into_iter().collect()
+    let Some(winget) = std::env::var_os("LOCALAPPDATA").map(|local| PathBuf::from(local).join(r"Microsoft\WinGet")) else {
+        return Vec::new();
+    };
+    let packages = std::fs::read_dir(winget.join("Packages")).into_iter().flatten().flatten();
+    let platform_tools = packages
+        .filter(|package| package.file_name().to_string_lossy().starts_with("Google.PlatformTools"))
+        .map(|package| package.path().join(r"platform-tools\adb.exe"));
+    std::iter::once(winget.join(r"Links\adb.exe")).chain(platform_tools).collect()
 }
 
 #[cfg(not(windows))]

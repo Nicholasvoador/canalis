@@ -61,9 +61,12 @@ fn screen_settings(ui: &mut Ui, settings: &mut Settings) {
 
 fn theme_settings(ui: &mut Ui, page: &mut PageContext) {
     card(ui, |ui| {
-        ui.label(bold("Preview", 19.0));
+        ui.horizontal(|ui| {
+            ui.label(bold("Preview", 19.0));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| add_media_button(ui, page));
+        });
         ui.add_space(10.0);
-        ui.vertical_centered(|ui| screen_preview(ui, &page.editor.settings, page.status));
+        ui.vertical_centered(|ui| screen_preview(ui, &page.editor.settings, page.status, page.media_preview));
     });
     ui.add_space(14.0);
     card(ui, |ui| {
@@ -113,10 +116,7 @@ fn split_theme_name(index: usize, theme: &str) -> (String, String) {
 
 fn media_library(ui: &mut Ui, page: &mut PageContext) {
     card(ui, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(bold("Your media", 19.0));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| add_media_button(ui, page));
-        });
+        ui.label(bold("Your media", 19.0));
         ui.label(muted("Images, GIFs and videos are copied to the screen over USB (adb). Use a 2:1 ratio; the panel is 2240×1080."));
         ui.add_space(10.0);
         media_list(ui, &mut page.editor.settings);

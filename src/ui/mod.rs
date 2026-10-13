@@ -8,6 +8,7 @@ mod fonts;
 mod format;
 mod icons;
 mod jobs;
+mod media_preview;
 mod network_history;
 mod pages;
 mod screen_preview;

@@ -2,6 +2,7 @@
 
 use super::editor::SettingsEditor;
 use super::jobs::{JobOutcome, Jobs};
+use super::media_preview::MediaPreview;
 use super::network_history::NetworkHistory;
 use super::pages::home::{self, HomeTab};
 use super::pages::panorama::{self, PanoramaTab};
@@ -49,6 +50,7 @@ pub struct PanoramaApp {
     status: StatusReader,
     network: NetworkHistory,
     jobs: Jobs,
+    media_preview: MediaPreview,
     notice: Option<Notice>,
 }
 
@@ -71,6 +73,7 @@ impl PanoramaApp {
             status: StatusReader::new(status_path),
             network: NetworkHistory::default(),
             jobs: Jobs::default(),
+            media_preview: MediaPreview::default(),
             notice: None,
         }
     }
@@ -120,7 +123,7 @@ impl PanoramaApp {
 
     fn content(&mut self, ui: &mut Ui) {
         let frame = egui::Frame::new().fill(BACKGROUND).inner_margin(Margin { left: 36, right: 36, top: 20, bottom: 20 });
-        let mut page = PageContext { editor: &mut self.editor, status: &self.status.current, network: &self.network, now_millis: unix_millis(), jobs: &mut self.jobs, interacting: false };
+        let mut page = PageContext { editor: &mut self.editor, status: &self.status.current, network: &self.network, now_millis: unix_millis(), jobs: &mut self.jobs, media_preview: &mut self.media_preview, interacting: false };
         egui::CentralPanel::default().frame(frame).show(ui, |ui| {
             match self.page {
                 Page::Home => home::show(ui, &mut self.home_tab, &mut page),

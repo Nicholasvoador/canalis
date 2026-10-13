@@ -59,6 +59,17 @@ pub fn overlay_value(field: &str, status: &LiveStatus, unit: &str) -> String {
     }
 }
 
+/// "46°C" -> ("46", "°C"), so the number can be drawn large and the unit small.
+pub fn split_reading(reading: &str) -> (String, String) {
+    let unit_start = reading.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '—')).unwrap_or(reading.len());
+    (reading[..unit_start].to_string(), reading[unit_start..].trim().to_string())
+}
+
+/// The short caption the screen prints under a stat, e.g. "CPU TEMP".
+pub fn overlay_label(field: &str) -> String {
+    field.replace("Temperature", "Temp").to_uppercase()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,5 +99,19 @@ mod tests {
         assert_eq!(overlay_value("CPU Temperature", &status, "Celsius"), "46°C");
         assert_eq!(overlay_value("CPU Usage", &status, "Celsius"), "12%");
         assert_eq!(overlay_value("GPU Power", &status, "Celsius"), "48 W");
+    }
+
+    #[test]
+    fn readings_split_into_number_and_unit() {
+        assert_eq!(split_reading("46°C"), ("46".into(), "°C".into()));
+        assert_eq!(split_reading("3500 MHz"), ("3500".into(), "MHz".into()));
+        assert_eq!(split_reading("1.250 V"), ("1.250".into(), "V".into()));
+        assert_eq!(split_reading("—"), ("—".into(), String::new()));
+    }
+
+    #[test]
+    fn labels_match_the_screen() {
+        assert_eq!(overlay_label("GPU Temperature"), "GPU TEMP");
+        assert_eq!(overlay_label("CPU Usage"), "CPU USAGE");
     }
 }

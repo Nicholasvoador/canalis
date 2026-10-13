@@ -14,6 +14,11 @@ pub fn status_path() -> PathBuf {
     status_path_from(&environment_variable, home_directory())
 }
 
+/// Local copies of the media on the screen, used for the window's preview.
+pub fn media_directory() -> PathBuf {
+    settings_path().with_file_name("media")
+}
+
 /// Where the Windows service writes its messages (Linux uses the systemd journal).
 #[cfg(windows)]
 pub fn log_path() -> PathBuf {
