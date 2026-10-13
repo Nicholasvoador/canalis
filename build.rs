@@ -12,6 +12,7 @@ const ICON_SIZES: [u32; 6] = [16, 24, 32, 48, 64, app_icon::LARGEST_SIZE];
 
 fn main() {
     println!("cargo:rerun-if-changed=src/app_icon.rs");
+    println!("cargo:rerun-if-changed=assets/icons/logo.svg");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;
     }

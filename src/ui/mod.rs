@@ -51,6 +51,7 @@ pub fn run(store: SettingsStore, status_path: PathBuf, start_page: StartPage) ->
         "Panorama",
         options,
         Box::new(move |creation| {
+            egui_extras::install_image_loaders(&creation.egui_ctx);
             fonts::install(&creation.egui_ctx);
             theme::apply(&creation.egui_ctx);
             Ok(Box::new(app::PanoramaApp::new(store, status_path, start_page)))

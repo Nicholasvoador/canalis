@@ -1,6 +1,8 @@
-//! The app icon (window, taskbar, tray and panorama.exe), drawn in code: the sidebar's brand mark
-//! (a screen outline with a bar) in black on a lime rounded square. Shapes are anti-aliased from signed distances.
+//! The app icon (window, taskbar, tray and panorama.exe): the sidebar's logo, assets/icons/logo.svg,
+//! in black on a lime rounded square.
 
+use resvg::tiny_skia::{Pixmap, Transform};
+use resvg::usvg::{Options, Tree};
 use std::path::Path;
 
 /// The largest size drawn: the window icon and the PNG for Linux launchers.
@@ -9,17 +11,18 @@ const DESIGN_SIZE: f32 = 32.0;
 const LIME: [u8; 3] = [0xDE, 0xF7, 0x50];
 const BLACK: [u8; 3] = [0x0B, 0x0B, 0x0C];
 const BACKGROUND: RoundedRect = RoundedRect { centre: (16.0, 16.0), half_size: (16.0, 16.0), radius: 7.0 };
-const SCREEN: RoundedRect = RoundedRect { centre: (16.0, 16.0), half_size: (10.5, 7.0), radius: 3.0 };
-const SCREEN_LINE_WIDTH: f32 = 2.6;
-const BAR: RoundedRect = RoundedRect { centre: (16.0, 16.0), half_size: (4.5, 1.4), radius: 1.4 };
+const LOGO: &str = include_str!("../assets/icons/logo.svg");
+/// The logo's size on the tile, so it keeps a margin inside the rounded corners.
+const LOGO_SCALE: f32 = 0.78;
 
 /// `size`×`size` pixels, RGBA, row by row.
 pub fn rgba(size: u32) -> Vec<u8> {
     let scale = DESIGN_SIZE / size as f32;
+    let ink = logo_coverage(size);
     (0..size * size)
         .flat_map(|index| {
             let (x, y) = ((index % size) as f32 + 0.5, (index / size) as f32 + 0.5);
-            pixel(x * scale, y * scale, scale)
+            pixel(coverage(BACKGROUND.distance(x * scale, y * scale), scale), ink[index as usize])
         })
         .collect()
 }
@@ -38,12 +41,18 @@ pub fn argb(size: u32) -> Vec<u8> {
     rgba(size).chunks_exact(4).flat_map(|pixel| [pixel[3], pixel[0], pixel[1], pixel[2]]).collect()
 }
 
-/// Colour at a point given in 32-unit design coordinates; `pixel_size` is one pixel in those units.
-fn pixel(x: f32, y: f32, pixel_size: f32) -> [u8; 4] {
-    let background = coverage(BACKGROUND.distance(x, y), pixel_size);
-    let screen_outline = coverage(SCREEN.distance(x, y).abs() - SCREEN_LINE_WIDTH / 2.0, pixel_size);
-    let bar = coverage(BAR.distance(x, y), pixel_size);
-    let ink = screen_outline.max(bar);
+/// How much of each pixel the logo covers, from 0 to 1, row by row.
+fn logo_coverage(size: u32) -> Vec<f32> {
+    let logo = Tree::from_str(LOGO, &Options::default()).expect("assets/icons/logo.svg is valid SVG");
+    let mut pixmap = Pixmap::new(size, size).expect("icon sizes are not zero");
+    let scale = size as f32 / DESIGN_SIZE * LOGO_SCALE;
+    let margin = size as f32 * (1.0 - LOGO_SCALE) / 2.0;
+    resvg::render(&logo, Transform::from_row(scale, 0.0, 0.0, scale, margin, margin), &mut pixmap.as_mut());
+    pixmap.pixels().iter().map(|pixel| pixel.alpha() as f32 / 255.0).collect()
+}
+
+/// Lime blended towards black by `ink`, with the tile's `background` coverage as alpha.
+fn pixel(background: f32, ink: f32) -> [u8; 4] {
     let [red, green, blue] = std::array::from_fn(|channel| (LIME[channel] as f32 * (1.0 - ink) + BLACK[channel] as f32 * ink).round() as u8);
     [red, green, blue, (background * 255.0).round() as u8]
 }
@@ -87,9 +96,10 @@ mod tests {
     }
 
     #[test]
-    fn the_bar_in_the_middle_is_black() {
+    fn the_logo_in_the_middle_is_black() {
         let image = rgba(32);
-        assert_eq!(pixel_at(&image, 32, 15, 15), [BLACK[0], BLACK[1], BLACK[2], 255]);
+        assert_eq!(pixel_at(&image, 32, 8, 12), [BLACK[0], BLACK[1], BLACK[2], 255]);
+        assert_eq!(pixel_at(&image, 32, 16, 3), [LIME[0], LIME[1], LIME[2], 255]);
     }
 
     #[test]

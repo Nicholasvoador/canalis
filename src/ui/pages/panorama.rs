@@ -48,8 +48,6 @@ pub fn show(ui: &mut Ui, state: &mut PanoramaPage, page: &mut PageContext) {
 }
 
 fn preset_tab(ui: &mut Ui, carousel: &mut Carousel, page: &mut PageContext) {
-    preview_card(ui, page);
-    ui.add_space(14.0);
     card(ui, |ui| {
         ui.label(bold("Pre-set", 19.0));
         ui.label(muted("Click a side card to bring it forward, then click the centre card to show it on the screen."));

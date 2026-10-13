@@ -1,6 +1,12 @@
-//! Small line icons for the dashboard cards, drawn around a centre point.
+//! Line icons: SVGs from assets/icons for the sidebar and logo (drawn in white so a tint colours
+//! them), and small painted ones for the dashboard cards, drawn around a centre point.
 
-use eframe::egui::{Color32, Painter, Pos2, Rect, Stroke, StrokeKind, vec2};
+use eframe::egui::{Color32, ImageSource, Painter, Pos2, Rect, Stroke, StrokeKind, include_image, vec2};
+
+pub const LOGO: ImageSource<'static> = include_image!("../../assets/icons/logo.svg");
+pub const HOME: ImageSource<'static> = include_image!("../../assets/icons/home.svg");
+pub const PANORAMA: ImageSource<'static> = include_image!("../../assets/icons/panorama.svg");
+pub const SETTINGS: ImageSource<'static> = include_image!("../../assets/icons/settings.svg");
 
 const LINE_WIDTH: f32 = 1.6;
 
