@@ -8,7 +8,7 @@ $Shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Panorama.lnk'
 $HardwareMonitorTask = 'Panorama - LibreHardwareMonitor'
 
 Remove-ItemProperty $RunKey -Name Panorama -ErrorAction SilentlyContinue
-Get-Process -Name panorama -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process | Where-Object { $_.Path -like "$InstallDirectory\*" } | Stop-Process -Force
 Start-Sleep -Milliseconds 500
 Remove-Item $Shortcut -ErrorAction SilentlyContinue
 Remove-Item $InstallDirectory -Recurse -Force -ErrorAction SilentlyContinue

@@ -41,7 +41,7 @@ function Build-Binary {
 }
 
 function Stop-RunningPanorama {
-    Get-Process -Name panorama -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-Process | Where-Object { $_.Path -like "$InstallDirectory\*" } | Stop-Process -Force
     Start-Sleep -Milliseconds 500
 }
 
