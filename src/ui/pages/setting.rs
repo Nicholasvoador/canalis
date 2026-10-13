@@ -125,9 +125,8 @@ fn sensors_card(ui: &mut Ui, page: &PageContext) {
         }
         status_dot(ui, LIME, "Not available: LibreHardwareMonitor is not running");
         ui.label(muted(
-            "Install LibreHardwareMonitor (winget install LibreHardwareMonitor.LibreHardwareMonitor), run it as administrator, \
-             and turn on Options → Remote Web Server → Run, plus Run On Windows Startup. \
-             Until then the CPU temperature reads 0, so the smart fan curve stays at its lowest speed.",
+            "install-windows.ps1 installs LibreHardwareMonitor and starts it at login; run the installer again to repair it. \
+             Until it runs, the CPU temperature reads 0, so the smart fan curve stays at its lowest speed.",
         ));
     });
 }

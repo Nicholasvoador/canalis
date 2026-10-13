@@ -9,10 +9,27 @@ $SettingsFile = Join-Path $env:APPDATA 'panorama\settings.json'
 $RunKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $Shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Panorama.lnk'
 
-function Assert-RustInstalled {
-    if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-        throw 'Rust is not installed. Install it with: winget install Rustlang.Rustup   (then open a new terminal)'
+# Rust on Windows links with Microsoft's C++ tools.
+function Install-BuildTools {
+    $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+    if ((Test-Path $vswhere) -and (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)) {
+        Write-Host '==> C++ build tools are already installed'
+        return
     }
+    Write-Host '==> Installing the Microsoft C++ build tools Rust needs (a large download; approve the administrator prompt)'
+    winget install --id Microsoft.VisualStudio.2022.BuildTools -e --silent --disable-interactivity --accept-package-agreements --accept-source-agreements --override '--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended' | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw 'winget could not install the C++ build tools' }
+}
+
+function Install-Rust {
+    $env:PATH = (Join-Path $env:USERPROFILE '.cargo\bin') + ";$env:PATH"
+    if (Get-Command cargo -ErrorAction SilentlyContinue) {
+        Write-Host '==> Rust is already installed'
+        return
+    }
+    Install-WingetPackage 'Rustlang.Rustup'
+    if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) { rustup default stable | Out-Host }
+    if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) { throw 'Rust was installed but cargo was not found; open a new terminal and run this again' }
 }
 
 function Build-Binary {
@@ -80,18 +97,57 @@ function Start-PanoramaService {
     Start-Process $Binary -ArgumentList 'service' -WindowStyle Hidden
 }
 
-function Show-OptionalExtras {
-    if (-not (Get-Command adb -ErrorAction SilentlyContinue) -and -not (Test-Path "$env:LOCALAPPDATA\Microsoft\WinGet\Links\adb.exe")) {
-        Write-Host ''
-        Write-Host 'Optional: to add your own images and videos, install adb:  winget install Google.PlatformTools'
+function Assert-WingetInstalled {
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        throw 'winget is missing. Install "App Installer" from the Microsoft Store, then run this again.'
     }
-    Write-Host ''
-    Write-Host 'Optional: for CPU temperature, fan speeds and CPU power, install LibreHardwareMonitor:'
-    Write-Host '  winget install LibreHardwareMonitor.LibreHardwareMonitor'
-    Write-Host '  then run it as administrator and turn on Options > Remote Web Server > Run, and Options > Run On Windows Startup.'
 }
 
-Assert-RustInstalled
+function Install-WingetPackage([string]$Id) {
+    winget list --id $Id -e --disable-interactivity | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "==> $Id is already installed"
+        return
+    }
+    Write-Host "==> Installing $Id"
+    winget install --id $Id -e --silent --disable-interactivity --accept-package-agreements --accept-source-agreements | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "winget could not install $Id" }
+}
+
+function Find-LibreHardwareMonitor {
+    $packages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    Get-ChildItem $packages -Directory -Filter 'LibreHardwareMonitor.LibreHardwareMonitor*' -ErrorAction SilentlyContinue |
+        Get-ChildItem -Recurse -Filter 'LibreHardwareMonitor.exe' | Select-Object -First 1 -ExpandProperty FullName
+}
+
+# The driver, settings and elevated login task need administrator rights: one UAC prompt.
+function Initialize-LibreHardwareMonitor {
+    $executable = Find-LibreHardwareMonitor
+    if (-not $executable) {
+        Write-Warning 'LibreHardwareMonitor.exe not found; temperatures and fan speeds will read 0.'
+        return
+    }
+    Write-Host '==> Setting up LibreHardwareMonitor (approve the administrator prompt)'
+    $helper = Join-Path $SourceDirectory 'packaging\windows-hardware-monitor.ps1'
+    $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$helper`"", '-Executable', "`"$executable`"", '-UserName', "`"$env:USERDOMAIN\$env:USERNAME`"")
+    try {
+        $helperProcess = Start-Process powershell -Verb RunAs -Wait -PassThru -ArgumentList $arguments
+        if ($helperProcess.ExitCode -ne 0) { Write-Warning 'LibreHardwareMonitor setup failed; temperatures and fan speeds will read 0.' }
+    } catch {
+        Write-Warning 'Administrator prompt declined; temperatures and fan speeds will read 0 until you run this installer again.'
+    }
+}
+
+# adb copies your own images and videos to the screen; LibreHardwareMonitor provides temperatures and fans.
+function Install-Companions {
+    Install-WingetPackage 'Google.PlatformTools'
+    Install-WingetPackage 'LibreHardwareMonitor.LibreHardwareMonitor'
+    Initialize-LibreHardwareMonitor
+}
+
+Assert-WingetInstalled
+Install-BuildTools
+Install-Rust
 $builtBinary = Build-Binary
 Stop-RunningPanorama
 Install-Binary $builtBinary
@@ -99,7 +155,7 @@ Disable-Kanali
 Install-InitialSettings
 Install-StartMenuShortcut
 Enable-LoginStart
+Install-Companions
 Start-PanoramaService
-Show-OptionalExtras
 Write-Host ''
 Write-Host 'Done. Open Panorama from the Start menu.'

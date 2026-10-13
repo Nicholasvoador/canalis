@@ -12,6 +12,7 @@ mod service;
 mod service_control;
 mod settings;
 mod status;
+mod tray;
 mod ui;
 #[cfg(windows)]
 mod windows_process;
@@ -46,8 +47,15 @@ fn run_service(store: SettingsStore, port: Option<String>) -> ExitCode {
     if let Err(error) = prepare_windows_service() {
         return print_outcome(Err(error));
     }
-    let status = status::StatusWriter::new(paths::status_path());
-    service::PanoramaService::new(store, status, port).run_forever()
+    let screen_link = std::thread::spawn(move || {
+        let status = status::StatusWriter::new(paths::status_path());
+        service::PanoramaService::new(store, status, port).run_forever();
+    });
+    if let Err(error) = tray::run() {
+        eprintln!("panorama: {error}; running without a tray icon");
+    }
+    let _never_finishes = screen_link.join();
+    ExitCode::SUCCESS
 }
 
 /// Only one service may talk to the screen; with no console, its messages go to a log file.

@@ -15,8 +15,12 @@ serialport = { version = "4.10", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 sysinfo = { version = "0.37", default-features = false, features = ["system", "disk", "network"] }
+tray-icon = "0.21"
 winreg = "0.55"
-windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Console", "Win32_System_Threading"] }
+windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Console", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(not(windows))'.dependencies]
+ksni = { version = "0.3", default-features = false, features = ["async-io", "blocking"] }
 
 [profile.release]
 lto = "thin"

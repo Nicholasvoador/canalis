@@ -3,7 +3,7 @@
 A native replacement for TRYX **KANALI** on **Linux and Windows**, for the **TRYX Panorama** cooler screen. It's written in Rust: one program with a desktop window, a background service and a command line.
 
 - **Window:** a dashboard, plus screen, theme and fan-curve settings, laid out like KANALI. It uses egui (native, no Electron, no web view).
-- **Background service:** keeps the screen configured and sends it live CPU/GPU/RAM/disk/network stats every second, even when the window is closed. It starts when you log in, like KANALI's "Startup with Windows".
+- **Background service:** keeps the screen configured and sends it live CPU/GPU/RAM/disk/network stats every second, even when the window is closed. It starts when you log in, like KANALI's "Startup with Windows", and shows a tray icon: click it to open the window, or choose **Quit** to stop it until the next login.
 - **Command line:** change any setting from a terminal or a keybinding.
 
 ## Install on Linux (Omarchy / Arch)
@@ -13,35 +13,37 @@ A native replacement for TRYX **KANALI** on **Linux and Windows**, for the **TRY
 ```
 
 The script:
-- installs `rust` and `android-tools` with pacman;
+- installs `rust`, `android-tools` (adb) and `lm_sensors` with pacman;
+- sets up the motherboard's sensor driver so fan speeds and board temperature can be read (`sensors-detect`; on MSI boards it also enables `nct6683` with `force=1`). CPU and NVMe temperatures work without extra setup;
 - builds a release binary to `~/.local/bin/panorama`;
 - adds a udev rule so your user can reach the screen without root;
 - copies your KANALI settings (rotation 270°, your GIF, CPU/GPU temperature overlay);
 - adds **Panorama** to the app launcher;
-- enables `panorama.service`, a systemd **user** service that starts at login.
+- enables `panorama.service`, a systemd **user** service that starts with your desktop session (`graphical-session.target`, which Omarchy's uwsm session provides). Its tray icon appears in Waybar's tray.
 
 Remove it with `./uninstall.sh` (your settings are kept).
 
 ## Install on Windows
 
-Needs Rust (`winget install Rustlang.Rustup`). Then, from PowerShell in this folder:
+From PowerShell in this folder:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
 ```
 
-The script:
+Everything it needs comes from winget, so there is nothing to install first. The script:
+- installs Rust (`Rustlang.Rustup`), plus the Microsoft C++ build tools Rust needs if they're missing (a large download);
 - builds a release binary to `%LOCALAPPDATA%\Programs\Panorama\panorama.exe`;
 - turns off KANALI's start with Windows and asks you to quit KANALI (both apps can't share the screen's port);
 - copies your KANALI settings;
 - adds **Panorama** to the Start menu;
+- installs **adb** (`Google.PlatformTools`), used to copy your own images and videos to the screen;
+- installs and sets up **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** for CPU temperature, fan speeds and CPU power. Windows only lets kernel drivers read those sensors. After one administrator prompt, it installs the PawnIO driver LibreHardwareMonitor uses, turns on its web server (Panorama reads `http://127.0.0.1:8085/data.json`), and starts it minimised to the tray at login with administrator rights (the `Panorama - LibreHardwareMonitor` scheduled task);
 - starts the service at login (a `Panorama` value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`) and starts it now.
 
-Optional extras:
-- **Your own images and videos** need adb: `winget install Google.PlatformTools`.
-- **CPU temperature, fan speeds and CPU power** need [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (`winget install LibreHardwareMonitor.LibreHardwareMonitor`). Windows only lets kernel drivers read those sensors. Run it as administrator and turn on **Options → Remote Web Server → Run** and **Options → Run On Windows Startup**; Panorama reads `http://127.0.0.1:8085/data.json`. Without it those values are 0, so the smart fan curve stays at its lowest speed.
+Running the installer means accepting the licences of the packages it installs from winget.
 
-Remove it with `.\uninstall-windows.ps1` (your settings are kept).
+Remove it with `.\uninstall-windows.ps1`. Your settings are kept, and so are LibreHardwareMonitor, PawnIO and adb (it prints the command to remove them).
 
 ## Use
 
@@ -110,24 +112,24 @@ KANALI reads its stats through the HWiNFO SDK: `lib\BYMonitor64.dll` is HWiNFO's
 | `sensors/` | hardware readings for Linux and Windows |
 | `service.rs` | the background loop |
 | `service_control/` | start/stop and start at login (systemd, or the Windows Run key) |
+| `tray/` | the service's tray icon (Windows notification area, or StatusNotifierItem on Linux) |
 | `ui/` | the window |
 
 ## Tested
 
 On the real screen (firmware V1.0.11):
-- **Windows:** installed with `install-windows.ps1` in place of KANALI; the service starts hidden, connects on COM3, applies settings and streams live CPU, memory, disk, network and GPU stats; start at login is registered; command-line output works.
+- **Windows:** installed with `install-windows.ps1` in place of KANALI; the installer sets up adb and LibreHardwareMonitor (with PawnIO) on its own; the service starts hidden with its tray icon, connects on COM3, applies settings and streams live CPU, memory, disk, network and GPU stats plus CPU, motherboard and NVMe temperatures, CPU power and fan speeds; start at login is registered; command-line output works.
 - Brightness changes made from the command line reach the screen within a second, and invalid values are refused and not saved.
 
 `cargo test` runs the unit tests on Windows, and the code type-checks for `x86_64-unknown-linux-gnu`.
 
-Not tested yet: the Linux sensor readers and `install.sh` on Omarchy itself, and LibreHardwareMonitor on Windows (its sensor parsing is unit-tested against a sample).
+Not tested yet: anything on Omarchy itself: `install.sh`, the Linux sensor readers and the Waybar tray icon.
 
 ## Known gaps
 
 - **"turboPump" warning:** the firmware logs `config JSONException--No value for turboPump`. KANALI's own `false` value causes a similar error. Settings still apply.
 - **Preset theme format:** the exact `id` object for built-in presets is inferred; only the "Customization" format was seen on the wire.
 - **Stats that need special access:** CPU voltage and memory speed are sent as 0. On Linux, CPU power is sent as 0 unless RAPL is readable; on Windows, temperatures, fans and CPU power need LibreHardwareMonitor.
-- **No tray icon:** the service runs in the background without one; open the window from the launcher or Start menu.
 - **Windows command line:** `panorama.exe` is a windowed program, so `cmd` doesn't wait for it and its exit code isn't reported. Output still appears.
 - **Not implemented:** firmware updates, the KANALI cloud connection, and "turbo pump" mode.
 
