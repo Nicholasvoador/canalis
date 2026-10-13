@@ -1,10 +1,11 @@
 //! Body of "POST config", the message that applies every setting at once.
 //!
-//! Mirrors what KANALI 1.2.1 sends (observed in its logs). KANALI also sends
+//! Mirrors what KANALI 1.2.1 sends (observed in its logs, for a custom theme and for a
+//! built-in one with a filter, a badge and Date & Time). KANALI also sends
 //! "turboPump": false, which the firmware rejects (it expects an object of
 //! unknown shape), so it is left out; the rest of the config still applies.
 
-use crate::settings::{CustomTheme, Fan, Settings};
+use crate::settings::{CustomTheme, Fan, OverlayStyle, Settings};
 use serde_json::{Value, json};
 
 pub fn build_device_config(settings: &Settings, spec: &Value) -> Value {
@@ -26,7 +27,7 @@ fn theme(settings: &Settings) -> Value {
     if settings.is_custom_theme() {
         custom_theme(&settings.custom)
     } else {
-        json!({ "id": settings.theme, "sysinfoDisplay": settings.overlay })
+        json!({ "id": settings.theme, "settings": style(&settings.overlay_style, &settings.overlay), "sysinfoDisplay": settings.overlay })
     }
 }
 
@@ -37,13 +38,17 @@ fn custom_theme(custom: &CustomTheme) -> Value {
         "playMode": custom.play_mode,
         "ratio": custom.ratio,
         "media": custom.media,
-        "settings": {
-            "color": custom.color,
-            "align": custom.align,
-            "filter": { "value": null, "opacity": 100 },
-            "badges": [],
-        },
+        "settings": style(&custom.style, &custom.overlay),
         "sysinfoDisplay": custom.overlay,
+    })
+}
+
+fn style(style: &OverlayStyle, overlay: &[String]) -> Value {
+    json!({
+        "color": style.color,
+        "align": style.align,
+        "filter": { "value": style.filter.value, "opacity": style.filter.opacity },
+        "badges": style.shown_badges(overlay),
     })
 }
 
@@ -54,7 +59,7 @@ fn fan(fan: &Fan) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::{FIXED_MODE, PRESETS, tests::KANALI_SETTINGS};
+    use crate::settings::{CPU_BADGE, DATE_AND_TIME, FIXED_MODE, GPU_BADGE, PRESETS, tests::KANALI_SETTINGS};
 
     // Body KANALI 1.2.1 sent with "POST config 1" on this machine, minus "turboPump".
     const KANALI_CONFIG: &str = r##"{"temperature":"Celsius","waterBlockScreen":{"enable":true,"displayInSleep":false,
@@ -75,11 +80,26 @@ mod tests {
         assert_eq!(build_device_config(&settings, &spec()), expected);
     }
 
+    /// The "id" KANALI 1.2.1 sent after choosing Pre-set 12, the Rain filter, the CPU badge and Date & Time.
+    const KANALI_PRESET_ID: &str = r##"{"id":"Pre-set 12: Cyber Bunker","settings":{"color":"#dcdcdc","align":"Left",
+        "filter":{"value":"Rain","opacity":100},"badges":["CPU Badge"]},"sysinfoDisplay":["CPU Temperature","GPU Temperature","Date&Time"]}"##;
+
     #[test]
-    fn preset_theme_sends_preset_id() {
-        let settings = Settings { theme: PRESETS[1].into(), ..Settings::default() };
-        let config = build_device_config(&settings, &spec());
-        assert_eq!(config["waterBlockScreen"]["id"]["id"], "Pre-set 2: Migration");
+    fn preset_theme_matches_kanali_payload() {
+        let mut settings = Settings { theme: PRESETS[11].into(), ..Settings::default() };
+        settings.overlay = vec!["CPU Temperature".into(), "GPU Temperature".into(), DATE_AND_TIME.into()];
+        settings.overlay_style.filter.value = Some("Rain".into());
+        settings.overlay_style.badges = vec![CPU_BADGE.into()];
+        let expected: Value = serde_json::from_str(KANALI_PRESET_ID).unwrap();
+        assert_eq!(build_device_config(&settings, &spec())["waterBlockScreen"]["id"], expected);
+    }
+
+    #[test]
+    fn badges_without_a_matching_stat_are_not_sent() {
+        let mut settings = Settings { theme: PRESETS[0].into(), ..Settings::default() };
+        settings.overlay_style.badges = vec![GPU_BADGE.into()];
+        settings.overlay = vec!["CPU Usage".into()];
+        assert_eq!(build_device_config(&settings, &spec())["waterBlockScreen"]["id"]["settings"]["badges"], json!([]));
     }
 
     #[test]

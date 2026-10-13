@@ -4,6 +4,7 @@ mod app_icon;
 mod cli;
 mod device_config;
 mod hidden_command;
+mod kanali_assets;
 mod link;
 mod media;
 mod paths;

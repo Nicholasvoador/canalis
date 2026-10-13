@@ -1,16 +1,20 @@
 //! Native desktop window (egui), styled after KANALI.
 
 mod app;
+mod carousel;
 mod charts;
 mod editor;
 mod fan_curve;
 mod fonts;
 mod format;
 mod icons;
+mod images;
 mod jobs;
+mod live_view;
 mod media_preview;
 mod network_history;
 mod pages;
+mod preset_art;
 mod screen_preview;
 mod theme;
 mod widgets;
@@ -24,8 +28,10 @@ use std::path::PathBuf;
 pub enum StartPage {
     Home,
     Specifications,
+    #[value(alias = "theme")]
+    Presets,
+    Customization,
     Screen,
-    Theme,
     Fan,
     Setting,
 }

@@ -19,6 +19,11 @@ pub fn media_directory() -> PathBuf {
     settings_path().with_file_name("media")
 }
 
+/// Pictures of the built-in themes for the carousel (from KANALI, or captured from the screen).
+pub fn preset_art_directory() -> PathBuf {
+    settings_path().with_file_name("presets")
+}
+
 /// Where the Windows service writes its messages (Linux uses the systemd journal).
 #[cfg(windows)]
 pub fn log_path() -> PathBuf {

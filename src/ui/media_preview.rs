@@ -1,16 +1,15 @@
 //! The media shown on the screen, decoded for the window's preview. GIFs animate; videos have no preview.
 
-use crate::media::AdbMediaLibrary;
-use eframe::egui::{ColorImage, Context, TextureHandle, TextureOptions};
+use super::images::{shrink, texture};
+use crate::media::AdbScreen;
+use eframe::egui::{Context, TextureHandle};
 use image::codecs::gif::GifDecoder;
-use image::imageops::{self, FilterType};
 use image::{AnimationDecoder, RgbaImage};
 use std::io::BufReader;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant};
 
-const PREVIEW_WIDTH: u32 = 640;
 const MAX_FRAMES: usize = 150;
 const MIN_FRAME_DELAY: Duration = Duration::from_millis(20);
 const VIDEO_EXTENSIONS: [&str; 2] = ["mp4", "avi"];
@@ -94,12 +93,12 @@ fn load(ctx: &Context, name: &str) -> Result<Animation, String> {
     if VIDEO_EXTENSIONS.iter().any(|extension| name.to_lowercase().ends_with(extension)) {
         return Err(format!("Video: {name}"));
     }
-    let local_file = AdbMediaLibrary::new().local_copy(name)?;
+    let local_file = AdbScreen::new().local_copy(name)?;
     let images = decode(&local_file).map_err(|error| format!("Cannot preview {name}: {error}"))?;
     let frames = images
         .into_iter()
         .enumerate()
-        .map(|(index, (image, delay))| (ctx.load_texture(format!("media-{name}-{index}"), to_color_image(&image), TextureOptions::LINEAR), delay))
+        .map(|(index, (image, delay))| (texture(ctx, &format!("media-{name}-{index}"), &image), delay))
         .collect();
     Ok(Animation { frames, started: Instant::now() })
 }
@@ -120,28 +119,4 @@ fn decode(path: &Path) -> Result<Vec<(RgbaImage, Duration)>, image::ImageError> 
 fn shrink_frame(frame: image::Frame) -> (RgbaImage, Duration) {
     let delay = Duration::from(frame.delay()).max(MIN_FRAME_DELAY);
     (shrink(frame.into_buffer()), delay)
-}
-
-fn shrink(image: RgbaImage) -> RgbaImage {
-    if image.width() <= PREVIEW_WIDTH {
-        return image;
-    }
-    let height = (image.height() as u64 * PREVIEW_WIDTH as u64 / image.width() as u64).max(1) as u32;
-    imageops::resize(&image, PREVIEW_WIDTH, height, FilterType::Triangle)
-}
-
-fn to_color_image(image: &RgbaImage) -> ColorImage {
-    ColorImage::from_rgba_unmultiplied([image.width() as usize, image.height() as usize], image.as_raw())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn shrinks_wide_images_keeping_the_ratio() {
-        let shrunk = shrink(RgbaImage::new(1920, 960));
-        assert_eq!((shrunk.width(), shrunk.height()), (PREVIEW_WIDTH, PREVIEW_WIDTH / 2));
-        assert_eq!(shrink(RgbaImage::new(100, 50)).width(), 100);
-    }
 }

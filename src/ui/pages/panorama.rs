@@ -1,127 +1,111 @@
-//! PANORAMA: screen, theme and fan settings for the cooler.
+//! PANORAMA, laid out like KANALI's page: built-in themes in a carousel, your own media, and the
+//! live stats drawn over either, plus screen and fan settings.
 
 use super::PageContext;
 use crate::media::SUPPORTED_EXTENSIONS;
 use crate::settings::{
-    ALIGNMENTS, CELSIUS, CUSTOMIZATION, FAHRENHEIT, FIXED_MODE, FanCurvePreset, MAX_OVERLAY_FIELDS, OVERLAY_FIELDS, PRESETS, ROTATIONS, SMART_MODE,
-    Settings,
+    ALIGNMENTS, CELSIUS, CPU_BADGE, CUSTOMIZATION, DARK_TEXT, FAHRENHEIT, FILTERS, FIXED_MODE, FanCurvePreset, Filter, GPU_BADGE, LIGHT_TEXT,
+    MAX_OVERLAY_FIELDS, OVERLAY_FIELDS, OverlayStyle, PLAY_MODES, PRESETS, SMART_MODE, Settings, badge_is_available,
 };
+use crate::ui::carousel::Carousel;
 use crate::ui::fan_curve::fan_curve_editor;
+use crate::ui::format::field_title;
 use crate::ui::screen_preview::{parse_hex_color, screen_preview};
-use crate::ui::theme::{BORDER, CARD_RAISED, LIME, MUTED, TEXT};
+use crate::ui::theme::{BORDER, LIME, MUTED};
 use crate::ui::widgets::{bold, card, muted, page_header, pill, pill_button, primary_button, segmented, setting_row, tabs, toggle};
-use eframe::egui::{self, Align2, Color32, FontId, Sense, Stroke, StrokeKind, Ui, vec2};
-
-const THEME_TILE: egui::Vec2 = egui::Vec2::new(200.0, 112.0);
+use eframe::egui::{self, Color32, Sense, Stroke, StrokeKind, Ui, vec2};
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum PanoramaTab {
     #[default]
+    Presets,
+    Customization,
     Screen,
-    Theme,
     Fan,
 }
 
-pub fn show(ui: &mut Ui, tab: &mut PanoramaTab, page: &mut PageContext) {
+pub struct PanoramaPage {
+    pub tab: PanoramaTab,
+    carousel: Carousel,
+}
+
+impl PanoramaPage {
+    pub fn new(tab: PanoramaTab, settings: &Settings) -> Self {
+        Self { tab, carousel: Carousel::new(settings.preset_index().unwrap_or(0)) }
+    }
+}
+
+pub fn show(ui: &mut Ui, state: &mut PanoramaPage, page: &mut PageContext) {
     page_header(ui, "PANORAMA");
-    tabs(ui, tab, &[(PanoramaTab::Screen, "Screen"), (PanoramaTab::Theme, "Theme"), (PanoramaTab::Fan, "Fan")]);
-    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| match tab {
+    let options = [(PanoramaTab::Presets, "Pre-set"), (PanoramaTab::Customization, "Customization"), (PanoramaTab::Screen, "Screen"), (PanoramaTab::Fan, "Fan")];
+    tabs(ui, &mut state.tab, &options);
+    egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| match state.tab {
+        PanoramaTab::Presets => preset_tab(ui, &mut state.carousel, page),
+        PanoramaTab::Customization => customization_tab(ui, page),
         PanoramaTab::Screen => screen_settings(ui, &mut page.editor.settings),
-        PanoramaTab::Theme => theme_settings(ui, page),
         PanoramaTab::Fan => fan_settings(ui, page),
     });
 }
 
-fn screen_settings(ui: &mut Ui, settings: &mut Settings) {
+fn preset_tab(ui: &mut Ui, carousel: &mut Carousel, page: &mut PageContext) {
+    preview_card(ui, page);
+    ui.add_space(14.0);
     card(ui, |ui| {
-        setting_row(ui, "Screen display", "Turn the cooler's screen on or off.", |ui| {
-            toggle(ui, &mut settings.enable);
-        });
-        setting_row(ui, "Brightness", "", |ui| {
-            ui.add(egui::Slider::new(&mut settings.brightness, 0..=100).suffix("%"));
-        });
-        setting_row(ui, "Screen rotation", "Match how the pump head is mounted.", |ui| {
-            let options: Vec<(u16, String)> = ROTATIONS.iter().rev().map(|degrees| (*degrees, format!("{degrees}°"))).collect();
-            segmented(ui, &mut settings.rotate, &options);
-        });
-        setting_row(
-            ui,
-            "Black screen while the PC sleeps",
-            "On: the screen goes dark when the PC is off or the app is closed. Off: it shows a sleep animation.",
-            |ui| {
-                toggle(ui, &mut settings.display_in_sleep);
-            },
-        );
-        setting_row(ui, "Temperature unit", "", |ui| {
-            let options = [(FAHRENHEIT.to_string(), "°F".to_string()), (CELSIUS.to_string(), "°C".to_string())];
-            segmented(ui, &mut settings.temperature_unit, &options);
-        });
+        ui.label(bold("Pre-set", 19.0));
+        ui.label(muted("Click a side card to bring it forward, then click the centre card to show it on the screen."));
+        ui.add_space(10.0);
+        let selected = page.editor.settings.preset_index();
+        if let Some(index) = carousel.show(ui, &mut page.preview.presets, selected) {
+            page.editor.settings.theme = PRESETS[index].into();
+        }
     });
+    ui.add_space(14.0);
+    let settings = &mut page.editor.settings;
+    stats_card(ui, &mut settings.overlay, &mut settings.overlay_style);
 }
 
-fn theme_settings(ui: &mut Ui, page: &mut PageContext) {
+fn customization_tab(ui: &mut Ui, page: &mut PageContext) {
+    preview_card(ui, page);
+    ui.add_space(14.0);
+    media_library(ui, page);
+    ui.add_space(14.0);
+    let custom = &mut page.editor.settings.custom;
+    stats_card(ui, &mut custom.overlay, &mut custom.style);
+}
+
+fn preview_card(ui: &mut Ui, page: &mut PageContext) {
     card(ui, |ui| {
         ui.horizontal(|ui| {
             ui.label(bold("Preview", 19.0));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| add_media_button(ui, page));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let mut live = page.preview.live.is_on();
+                if toggle(ui, &mut live) {
+                    page.preview.live.set_on(live, ui.ctx());
+                }
+                ui.label("Live view").on_hover_text("Screenshots of the cooler's screen over USB, every couple of seconds");
+            });
         });
         ui.add_space(10.0);
-        ui.vertical_centered(|ui| screen_preview(ui, &page.editor.settings, page.status, page.media_preview));
+        ui.vertical_centered(|ui| screen_preview(ui, &page.editor.settings, page.status, page.preview));
     });
-    ui.add_space(14.0);
-    card(ui, |ui| {
-        ui.label(bold("Theme", 19.0));
-        ui.add_space(10.0);
-        theme_gallery(ui, &mut page.editor.settings);
-    });
-    ui.add_space(14.0);
-    if page.editor.settings.is_custom_theme() {
-        media_library(ui, page);
-        ui.add_space(14.0);
-    }
-    overlay_settings(ui, &mut page.editor.settings);
-}
-
-fn theme_gallery(ui: &mut Ui, settings: &mut Settings) {
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(12.0, 12.0);
-        let themes = PRESETS.iter().copied().chain(std::iter::once(CUSTOMIZATION));
-        for (index, theme) in themes.enumerate() {
-            if theme_tile(ui, index, theme, settings.theme == theme).clicked() {
-                settings.theme = theme.to_string();
-            }
-        }
-    });
-}
-
-fn theme_tile(ui: &mut Ui, index: usize, theme: &str, selected: bool) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(THEME_TILE, Sense::click());
-    let painter = ui.painter();
-    painter.rect_filled(rect, 14, CARD_RAISED);
-    let border = if selected { Stroke::new(2.5, LIME) } else if response.hovered() { Stroke::new(1.5, MUTED) } else { Stroke::new(1.0, BORDER) };
-    painter.rect_stroke(rect, 14, border, StrokeKind::Inside);
-    let (number, name) = split_theme_name(index, theme);
-    painter.text(rect.left_top() + vec2(14.0, 12.0), Align2::LEFT_TOP, number, FontId::proportional(12.0), if selected { LIME } else { MUTED });
-    painter.text(rect.left_bottom() + vec2(14.0, -14.0), Align2::LEFT_BOTTOM, name, FontId::new(15.0, crate::ui::theme::bold_family()), TEXT);
-    response
-}
-
-/// "Pre-set 3: Quantum time capsule" -> ("Preset 3", "Quantum time capsule").
-fn split_theme_name(index: usize, theme: &str) -> (String, String) {
-    match theme.split_once(": ") {
-        Some((_, name)) => (format!("Preset {}", index + 1), name.to_string()),
-        None => ("Your media".into(), theme.to_string()),
-    }
 }
 
 fn media_library(ui: &mut Ui, page: &mut PageContext) {
     card(ui, |ui| {
-        ui.label(bold("Your media", 19.0));
+        ui.horizontal(|ui| {
+            ui.label(bold("Your media", 19.0));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| add_media_button(ui, page));
+        });
         ui.label(muted("Images, GIFs and videos are copied to the screen over USB (adb). Use a 2:1 ratio; the panel is 2240×1080."));
         ui.add_space(10.0);
-        media_list(ui, &mut page.editor.settings);
-        ui.add_space(10.0);
-        custom_text_settings(ui, &mut page.editor.settings);
+        let settings = &mut page.editor.settings;
+        media_list(ui, settings);
+        if !settings.is_custom_theme() && !settings.custom.media.is_empty() {
+            ui.add_space(10.0);
+            if primary_button(ui, "Show my media on the screen").clicked() {
+                settings.theme = CUSTOMIZATION.into();
+            }
+        }
     });
 }
 
@@ -157,34 +141,24 @@ fn media_list(ui: &mut Ui, settings: &mut Settings) {
     if let Some(index) = remove {
         settings.custom.media.remove(index);
     }
-    if settings.custom.media.len() > 1 {
-        ui.horizontal(|ui| {
-            ui.label("Playback");
-            segmented(ui, &mut settings.custom.play_mode, &[("Single".into(), "First only".into()), ("Loop".into(), "Cycle all".into())]);
-        });
-    }
-}
-
-fn custom_text_settings(ui: &mut Ui, settings: &mut Settings) {
+    ui.add_space(6.0);
     ui.horizontal(|ui| {
-        ui.label("Overlay text colour");
-        let mut color = parse_hex_color(&settings.custom.color).unwrap_or(Color32::WHITE);
-        if ui.color_edit_button_srgba(&mut color).changed() {
-            settings.custom.color = format!("#{:02x}{:02x}{:02x}", color.r(), color.g(), color.b());
-        }
-        ui.add_space(24.0);
-        ui.label("Alignment");
-        let options: Vec<(String, String)> = ALIGNMENTS.iter().map(|align| (align.to_string(), align.to_string())).collect();
-        segmented(ui, &mut settings.custom.align, &options);
+        ui.label("Play mode");
+        let options: Vec<(String, String)> = PLAY_MODES.iter().map(|mode| (mode.to_string(), mode.to_string())).collect();
+        segmented(ui, &mut settings.custom.play_mode, &options);
     });
 }
 
-fn overlay_settings(ui: &mut Ui, settings: &mut Settings) {
+/// KANALI's "System Information Display": up to three stats and how they are drawn.
+fn stats_card(ui: &mut Ui, overlay: &mut Vec<String>, style: &mut OverlayStyle) {
     card(ui, |ui| {
-        ui.label(bold("Live stats on the screen", 19.0));
-        ui.label(muted(format!("Pick up to {MAX_OVERLAY_FIELDS}. They are drawn over the theme.")));
+        ui.horizontal(|ui| {
+            ui.label(bold("System Information Display", 19.0));
+            ui.label(muted(format!("Select up to {MAX_OVERLAY_FIELDS} items")));
+        });
         ui.add_space(10.0);
-        let overlay = settings.active_overlay_mut();
+        style_controls(ui, style, overlay);
+        ui.add_space(12.0);
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
             for field in OVERLAY_FIELDS {
@@ -194,10 +168,60 @@ fn overlay_settings(ui: &mut Ui, settings: &mut Settings) {
     });
 }
 
+fn style_controls(ui: &mut Ui, style: &mut OverlayStyle, overlay: &[String]) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = vec2(10.0, 8.0);
+        for color in [DARK_TEXT, LIGHT_TEXT] {
+            if colour_swatch(ui, color, style.color == color).clicked() {
+                style.color = color.into();
+            }
+        }
+        ui.add_space(14.0);
+        let alignments: Vec<(String, String)> = ALIGNMENTS.iter().map(|align| (align.to_string(), align.to_string())).collect();
+        segmented(ui, &mut style.align, &alignments);
+        ui.add_space(14.0);
+        filter_controls(ui, &mut style.filter);
+        ui.add_space(14.0);
+        for badge in [CPU_BADGE, GPU_BADGE] {
+            badge_chip(ui, &mut style.badges, badge, badge_is_available(badge, overlay));
+        }
+    });
+}
+
+fn colour_swatch(ui: &mut Ui, color: &str, selected: bool) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::click());
+    ui.painter().rect_filled(rect.shrink(5.0), 4, parse_hex_color(color).unwrap_or(Color32::WHITE));
+    let border = if selected { Stroke::new(2.0, LIME) } else { Stroke::new(1.0, BORDER) };
+    ui.painter().rect_stroke(rect, 8, border, StrokeKind::Inside);
+    response.on_hover_text(if color == DARK_TEXT { "Black text" } else { "Light grey text" }).on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+fn filter_controls(ui: &mut Ui, filter: &mut Filter) {
+    let mut options = vec![(None, "No filter".to_string())];
+    options.extend(FILTERS.iter().map(|name| (Some(name.to_string()), name.to_string())));
+    segmented(ui, &mut filter.value, &options);
+    ui.spacing_mut().slider_width = 100.0;
+    let slider = egui::Slider::new(&mut filter.opacity, 0..=100).step_by(25.0).suffix("%");
+    ui.add_enabled(filter.value.is_some(), slider).on_hover_text("Filter opacity");
+}
+
+fn badge_chip(ui: &mut Ui, badges: &mut Vec<String>, badge: &str, available: bool) {
+    let selected = available && badges.iter().any(|chosen| chosen == badge);
+    let hint = format!("Pick a {} stat to show this badge", badge.replace(" Badge", ""));
+    let response = ui.add_enabled(available, pill_button(badge, selected)).on_disabled_hover_text(hint);
+    if response.clicked() {
+        if selected {
+            badges.retain(|chosen| chosen != badge);
+        } else {
+            badges.push(badge.to_string());
+        }
+    }
+}
+
 fn overlay_chip(ui: &mut Ui, overlay: &mut Vec<String>, field: &str) {
     let selected = overlay.iter().any(|chosen| chosen == field);
     let full = overlay.len() >= MAX_OVERLAY_FIELDS;
-    let response = ui.add_enabled(selected || !full, pill_button(field, selected));
+    let response = ui.add_enabled(selected || !full, pill_button(field_title(field), selected));
     if response.clicked() {
         if selected {
             overlay.retain(|chosen| chosen != field);
@@ -205,6 +229,35 @@ fn overlay_chip(ui: &mut Ui, overlay: &mut Vec<String>, field: &str) {
             overlay.push(field.to_string());
         }
     }
+}
+
+fn screen_settings(ui: &mut Ui, settings: &mut Settings) {
+    card(ui, |ui| {
+        setting_row(ui, "Screen display", "Turn the cooler's screen on or off.", |ui| {
+            toggle(ui, &mut settings.enable);
+        });
+        setting_row(ui, "Brightness", "", |ui| {
+            ui.add(egui::Slider::new(&mut settings.brightness, 0..=100).suffix("%"));
+        });
+        setting_row(ui, "Mirror mode", "A mirror image of the screen for left-mounted cases. The cooler restarts when this changes.", |ui| {
+            let mut mirrored = settings.is_mirrored();
+            if toggle(ui, &mut mirrored) {
+                settings.set_mirrored(mirrored);
+            }
+        });
+        setting_row(
+            ui,
+            "Black screen while the PC sleeps",
+            "On: the screen goes dark when the PC is off or the app is closed. Off: it shows a sleep animation.",
+            |ui| {
+                toggle(ui, &mut settings.display_in_sleep);
+            },
+        );
+        setting_row(ui, "Temperature unit", "", |ui| {
+            let options = [(FAHRENHEIT.to_string(), "°F".to_string()), (CELSIUS.to_string(), "°C".to_string())];
+            segmented(ui, &mut settings.temperature_unit, &options);
+        });
+    });
 }
 
 fn fan_settings(ui: &mut Ui, page: &mut PageContext) {
@@ -239,15 +292,4 @@ fn fan_settings(ui: &mut Ui, page: &mut PageContext) {
         page.interacting |= fan_curve_editor(ui, &mut fan.smart_curve, current_temperature);
         ui.label(muted("Drag the points. Temperatures are CPU °C; values are fan %.").size(12.5));
     });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn theme_names_split_into_number_and_title() {
-        assert_eq!(split_theme_name(2, PRESETS[2]), ("Preset 3".into(), "Quantum time capsule".into()));
-        assert_eq!(split_theme_name(7, CUSTOMIZATION), ("Your media".into(), "Customization".into()));
-    }
 }

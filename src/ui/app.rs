@@ -2,10 +2,10 @@
 
 use super::editor::SettingsEditor;
 use super::jobs::{JobOutcome, Jobs};
-use super::media_preview::MediaPreview;
+use super::screen_preview::PreviewSources;
 use super::network_history::NetworkHistory;
 use super::pages::home::{self, HomeTab};
-use super::pages::panorama::{self, PanoramaTab};
+use super::pages::panorama::{self, PanoramaPage, PanoramaTab};
 use super::pages::setting::{self, SettingPage};
 use super::pages::PageContext;
 use super::StartPage;
@@ -44,36 +44,38 @@ struct Notice {
 pub struct PanoramaApp {
     page: Page,
     home_tab: HomeTab,
-    panorama_tab: PanoramaTab,
+    panorama_page: PanoramaPage,
     setting_page: SettingPage,
     editor: SettingsEditor,
     status: StatusReader,
     network: NetworkHistory,
     jobs: Jobs,
-    media_preview: MediaPreview,
+    preview: PreviewSources,
     notice: Option<Notice>,
 }
 
 impl PanoramaApp {
     pub fn new(store: SettingsStore, status_path: PathBuf, start_page: StartPage) -> Self {
         let (page, home_tab, panorama_tab) = match start_page {
-            StartPage::Home => (Page::Home, HomeTab::Dashboard, PanoramaTab::Screen),
-            StartPage::Specifications => (Page::Home, HomeTab::Specifications, PanoramaTab::Screen),
+            StartPage::Home => (Page::Home, HomeTab::Dashboard, PanoramaTab::Presets),
+            StartPage::Specifications => (Page::Home, HomeTab::Specifications, PanoramaTab::Presets),
+            StartPage::Presets => (Page::Panorama, HomeTab::Dashboard, PanoramaTab::Presets),
+            StartPage::Customization => (Page::Panorama, HomeTab::Dashboard, PanoramaTab::Customization),
             StartPage::Screen => (Page::Panorama, HomeTab::Dashboard, PanoramaTab::Screen),
-            StartPage::Theme => (Page::Panorama, HomeTab::Dashboard, PanoramaTab::Theme),
             StartPage::Fan => (Page::Panorama, HomeTab::Dashboard, PanoramaTab::Fan),
-            StartPage::Setting => (Page::Setting, HomeTab::Dashboard, PanoramaTab::Screen),
+            StartPage::Setting => (Page::Setting, HomeTab::Dashboard, PanoramaTab::Presets),
         };
+        let editor = SettingsEditor::new(store);
         Self {
             page,
             home_tab,
-            panorama_tab,
+            panorama_page: PanoramaPage::new(panorama_tab, &editor.settings),
             setting_page: SettingPage::new(status_path.clone()),
-            editor: SettingsEditor::new(store),
+            editor,
             status: StatusReader::new(status_path),
             network: NetworkHistory::default(),
             jobs: Jobs::default(),
-            media_preview: MediaPreview::default(),
+            preview: PreviewSources::default(),
             notice: None,
         }
     }
@@ -123,11 +125,11 @@ impl PanoramaApp {
 
     fn content(&mut self, ui: &mut Ui) {
         let frame = egui::Frame::new().fill(BACKGROUND).inner_margin(Margin { left: 36, right: 36, top: 20, bottom: 20 });
-        let mut page = PageContext { editor: &mut self.editor, status: &self.status.current, network: &self.network, now_millis: unix_millis(), jobs: &mut self.jobs, media_preview: &mut self.media_preview, interacting: false };
+        let mut page = PageContext { editor: &mut self.editor, status: &self.status.current, network: &self.network, now_millis: unix_millis(), jobs: &mut self.jobs, preview: &mut self.preview, interacting: false };
         egui::CentralPanel::default().frame(frame).show(ui, |ui| {
             match self.page {
                 Page::Home => home::show(ui, &mut self.home_tab, &mut page),
-                Page::Panorama => panorama::show(ui, &mut self.panorama_tab, &mut page),
+                Page::Panorama => panorama::show(ui, &mut self.panorama_page, &mut page),
                 Page::Setting => setting::show(ui, &mut self.setting_page, &mut page),
             }
         });

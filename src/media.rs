@@ -1,9 +1,10 @@
-//! Custom images and videos live on the screen in /sdcard/pcMedia, pushed over ADB.
-//! A local copy of each file is kept for the window's preview.
+//! The screen over ADB: custom images and videos live in /sdcard/pcMedia, and screenshots show
+//! what it displays. A local copy of each media file is kept for the window's preview.
 
 use crate::hidden_command::hidden_command;
 use crate::paths;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 const DEVICE_MEDIA_DIRECTORY: &str = "/sdcard/pcMedia";
 pub const SUPPORTED_EXTENSIONS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "webp", "mp4", "avi"];
@@ -13,15 +14,24 @@ const ADB_INSTALL_HINT: &str = "install it with: winget install Google.PlatformT
 #[cfg(not(windows))]
 const ADB_INSTALL_HINT: &str = "install it with: sudo pacman -S android-tools";
 
-pub struct AdbMediaLibrary {
+/// How the cooler's screen lists itself in `adb devices -l` (firmware V1.0.11).
+const COOLER_MODEL: &str = "model:cm01";
+
+pub struct AdbScreen {
     adb: PathBuf,
     local_directory: PathBuf,
+    serial: OnceLock<Option<String>>,
 }
 
-impl AdbMediaLibrary {
+impl AdbScreen {
     pub fn new() -> Self {
         let adb = std::env::var_os("PANORAMA_ADB").map(PathBuf::from).unwrap_or_else(default_adb);
-        Self { adb, local_directory: paths::media_directory() }
+        Self { adb, local_directory: paths::media_directory(), serial: OnceLock::new() }
+    }
+
+    /// A PNG of what the screen shows right now (2240×1080).
+    pub fn screenshot_png(&self) -> Result<Vec<u8>, String> {
+        self.run_binary(&["exec-out", "screencap", "-p"])
     }
 
     /// Copies a file to the screen and returns the name it has there.
@@ -54,16 +64,38 @@ impl AdbMediaLibrary {
     }
 
     fn run(&self, arguments: &[&str]) -> Result<String, String> {
-        let output = hidden_command(&self.adb)
-            .args(arguments)
-            .output()
-            .map_err(|error| format!("cannot run adb ({error}); {ADB_INSTALL_HINT}"))?;
+        self.run_binary(arguments).map(|output| String::from_utf8_lossy(&output).into_owned())
+    }
+
+    fn run_binary(&self, arguments: &[&str]) -> Result<Vec<u8>, String> {
+        let mut command = hidden_command(&self.adb);
+        if let Some(serial) = self.serial() {
+            command.args(["-s", serial]);
+        }
+        let output = command.args(arguments).output().map_err(|error| format!("cannot run adb ({error}); {ADB_INSTALL_HINT}"))?;
         if output.status.success() {
-            return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
+            return Ok(output.stdout);
         }
         let message = String::from_utf8_lossy(if output.stderr.is_empty() { &output.stdout } else { &output.stderr }).trim().to_string();
         Err(format!("adb {} failed: {message}", arguments[0]))
     }
+
+    /// With other Android devices attached, adb must be told which one is the cooler.
+    fn serial(&self) -> Option<&str> {
+        self.serial.get_or_init(|| self.device_listing().and_then(|listing| cooler_serial(&listing))).as_deref()
+    }
+
+    fn device_listing(&self) -> Option<String> {
+        let output = hidden_command(&self.adb).args(["devices", "-l"]).output().ok()?;
+        Some(String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+}
+
+/// The cooler's serial from `adb devices -l`, or the only online device when none looks like the cooler.
+fn cooler_serial(listing: &str) -> Option<String> {
+    let online: Vec<&str> = listing.lines().skip(1).filter(|line| line.split_whitespace().nth(1) == Some("device")).collect();
+    let cooler = online.iter().find(|line| line.contains(COOLER_MODEL)).or(online.first().filter(|_| online.len() == 1));
+    cooler.and_then(|line| line.split_whitespace().next()).map(str::to_string)
 }
 
 /// adb from where winget puts it on Windows (PATH only picks that up after logging in again), or from PATH.
@@ -122,6 +154,15 @@ mod tests {
         assert_eq!(device_file_name(Path::new("/home/me/My Wallpaper (1).GIF")), "My_Wallpaper__1.gif");
         assert_eq!(device_file_name(Path::new("clip.mp4")), "clip.mp4");
         assert_eq!(device_file_name(Path::new("....png")), "media.png");
+    }
+
+    #[test]
+    fn picks_the_cooler_among_other_devices() {
+        let listing = "List of devices attached\nBYZL25040200101181     device product:cm01 model:cm01 device:cm01 transport_id:1\nemulator-5562          offline transport_id:28\n";
+        assert_eq!(cooler_serial(listing).as_deref(), Some("BYZL25040200101181"));
+        let phone_and_cooler = "List of devices attached\nR58M  device model:SM_G991B\nBYZL  device model:cm01\n";
+        assert_eq!(cooler_serial(phone_and_cooler).as_deref(), Some("BYZL"));
+        assert_eq!(cooler_serial("List of devices attached\nA device model:x\nB device model:y\n"), None);
     }
 
     #[test]

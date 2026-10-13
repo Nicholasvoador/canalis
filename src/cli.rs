@@ -1,6 +1,6 @@
 //! Command line: `panorama` opens the window; subcommands change settings or run the service.
 
-use crate::media::AdbMediaLibrary;
+use crate::media::AdbScreen;
 use crate::settings::{ALIGNMENTS, CELSIUS, CUSTOMIZATION, FAHRENHEIT, FIXED_MODE, PRESETS, SMART_MODE, Settings, SettingsStore};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
@@ -142,13 +142,14 @@ fn add_custom_media(store: &SettingsStore, files: &[PathBuf], color: Option<Stri
             return Err("align must be Left, Center or Right".into());
         }
     }
-    let library = AdbMediaLibrary::new();
+    let library = AdbScreen::new();
     let names = files.iter().map(|file| library.add(file)).collect::<Result<Vec<_>, _>>()?;
     let message = format!("copied {} to the screen", names.join(", "));
     update(store, |settings| {
         settings.add_custom_media(names, append);
-        settings.custom.color = color.unwrap_or(settings.custom.color.clone());
-        settings.custom.align = align.unwrap_or(settings.custom.align.clone());
+        let style = &mut settings.custom.style;
+        style.color = color.unwrap_or(style.color.clone());
+        style.align = align.unwrap_or(style.align.clone());
         Ok(())
     })?;
     Ok(message)

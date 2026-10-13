@@ -1,6 +1,6 @@
 //! Turns status numbers into display text.
 
-use crate::settings::FAHRENHEIT;
+use crate::settings::{DATE_AND_TIME, FAHRENHEIT};
 use crate::status::LiveStatus;
 
 pub fn temperature(celsius: f64, unit: &str) -> String {
@@ -55,19 +55,28 @@ pub fn overlay_value(field: &str, status: &LiveStatus, unit: &str) -> String {
         "Memory Utilization" => percent(number("/snapshot/memory/load")),
         "Memory Frequency" => format!("{:.0} MHz", number("/snapshot/memory/speed")),
         "Motherboard Temperature" => temperature(number("/snapshot/motherboard/temperature"), unit),
+        DATE_AND_TIME => chrono::Local::now().format("%H:%M").to_string(),
         _ => "—".into(),
     }
 }
 
 /// "46°C" -> ("46", "°C"), so the number can be drawn large and the unit small.
 pub fn split_reading(reading: &str) -> (String, String) {
-    let unit_start = reading.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '-' || c == '—')).unwrap_or(reading.len());
+    let unit_start = reading.find(|c: char| !(c.is_ascii_digit() || ['.', ':', '-', '—'].contains(&c))).unwrap_or(reading.len());
     (reading[..unit_start].to_string(), reading[unit_start..].trim().to_string())
 }
 
-/// The short caption the screen prints under a stat, e.g. "CPU TEMP".
+/// The caption the screen prints under a stat, e.g. "CPU TEMP", or today's date under the time.
 pub fn overlay_label(field: &str) -> String {
-    field.replace("Temperature", "Temp").to_uppercase()
+    match field {
+        DATE_AND_TIME => chrono::Local::now().format("%Y/%m/%d").to_string(),
+        _ => field.replace("Temperature", "Temp").to_uppercase(),
+    }
+}
+
+/// How a stat is named in the window ("Date&Time" is the screen's own key).
+pub fn field_title(field: &str) -> &str {
+    if field == DATE_AND_TIME { "Date & Time" } else { field }
 }
 
 #[cfg(test)]
@@ -113,5 +122,7 @@ mod tests {
     fn labels_match_the_screen() {
         assert_eq!(overlay_label("GPU Temperature"), "GPU TEMP");
         assert_eq!(overlay_label("CPU Usage"), "CPU USAGE");
+        assert_eq!(overlay_label(DATE_AND_TIME).len(), "2026/10/13".len());
+        assert_eq!(split_reading("15:20"), ("15:20".into(), String::new()));
     }
 }

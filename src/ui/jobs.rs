@@ -1,6 +1,6 @@
 //! Slow work (adb pushes, service control) runs on a worker thread so the window stays responsive.
 
-use crate::media::AdbMediaLibrary;
+use crate::media::AdbScreen;
 use crate::service_control::{self, ServiceAction};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
@@ -23,7 +23,7 @@ impl Jobs {
 
     pub fn add_media(&mut self, files: Vec<PathBuf>, ctx: &eframe::egui::Context) {
         self.spawn("Copying media to the screen…", ctx, move || {
-            let library = AdbMediaLibrary::new();
+            let library = AdbScreen::new();
             match files.iter().map(|file| library.add(file)).collect::<Result<Vec<_>, _>>() {
                 Ok(names) => JobOutcome::MediaAdded(names),
                 Err(error) => JobOutcome::Failed(error),

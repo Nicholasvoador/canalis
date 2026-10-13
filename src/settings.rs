@@ -7,7 +7,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-pub const PRESETS: [&str; 7] = [
+/// The built-in themes KANALI 1.2.1 offers for the PANORAMA (the SE and WB coolers have others).
+pub const PRESETS: [&str; 14] = [
     "Pre-set 1: Cooling delivery",
     "Pre-set 2: Migration",
     "Pre-set 3: Quantum time capsule",
@@ -15,16 +16,33 @@ pub const PRESETS: [&str; 7] = [
     "Pre-set 5: Racing",
     "Pre-set 6: Shuttle",
     "Pre-set 7: Gift of TRYX",
+    "Pre-set 8: Sweet Cool Acrylic",
+    "Pre-set 9: Catch Me If You Can",
+    "Pre-set 10: The Battle of Ice and Fire",
+    "Pre-set 11: Oasis",
+    "Pre-set 12: Cyber Bunker",
+    "Pre-set 13: Edge Of Dream",
+    "Pre-set 14: Thermal Energy Prohibited",
 ];
 pub const CUSTOMIZATION: &str = "Customization";
 pub const ROTATIONS: [u16; 4] = [0, 90, 180, 270];
+/// KANALI's Mirror Mode (for left-mounted cases) only switches the screen between these two rotations.
+pub const MIRRORED_ROTATION: u16 = 90;
+pub const NORMAL_ROTATION: u16 = 270;
+pub const PLAY_MODES: [&str; 3] = ["Single", "Shuffle", "Loop"];
+pub const DARK_TEXT: &str = "#000000";
+pub const LIGHT_TEXT: &str = "#dcdcdc";
+pub const FILTERS: [&str; 2] = ["Rain", "Smoke"];
+pub const CPU_BADGE: &str = "CPU Badge";
+pub const GPU_BADGE: &str = "GPU Badge";
+pub const DATE_AND_TIME: &str = "Date&Time";
 pub const SMART_MODE: &str = "Smart Mode";
 pub const FIXED_MODE: &str = "Fixed Mode";
 pub const CELSIUS: &str = "Celsius";
 pub const FAHRENHEIT: &str = "Fahrenheit";
 pub const ALIGNMENTS: [&str; 3] = ["Left", "Center", "Right"];
 pub const MAX_OVERLAY_FIELDS: usize = 3;
-pub const OVERLAY_FIELDS: [&str; 13] = [
+pub const OVERLAY_FIELDS: [&str; 14] = [
     "CPU Temperature",
     "CPU Usage",
     "CPU Frequency",
@@ -38,6 +56,7 @@ pub const OVERLAY_FIELDS: [&str; 13] = [
     "Memory Utilization",
     "Memory Frequency",
     "Motherboard Temperature",
+    DATE_AND_TIME,
 ];
 
 pub type FanCurve = Vec<[u8; 2]>;
@@ -51,7 +70,9 @@ pub struct Settings {
     pub brightness: u8,
     pub rotate: u16,
     pub theme: String,
+    /// Live stats over the built-in themes, and how they look.
     pub overlay: Vec<String>,
+    pub overlay_style: OverlayStyle,
     pub custom: CustomTheme,
     pub fan: Fan,
     pub update_interval_seconds: f64,
@@ -65,11 +86,28 @@ pub struct CustomTheme {
     pub media: Vec<String>,
     pub ratio: String,
     pub play_mode: String,
-    pub color: String,
-    pub align: String,
+    #[serde(flatten)]
+    pub style: OverlayStyle,
     pub overlay: Vec<String>,
     #[serde(flatten)]
     pub unknown_fields: Map<String, Value>,
+}
+
+/// How the live stats are drawn: text colour, alignment, a rain or smoke filter, and CPU/GPU name badges.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct OverlayStyle {
+    pub color: String,
+    pub align: String,
+    pub filter: Filter,
+    pub badges: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default)]
+pub struct Filter {
+    pub value: Option<String>,
+    pub opacity: u8,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -92,6 +130,7 @@ impl Default for Settings {
             rotate: 0,
             theme: PRESETS[0].into(),
             overlay: Vec::new(),
+            overlay_style: OverlayStyle::default(),
             custom: CustomTheme::default(),
             fan: Fan::default(),
             update_interval_seconds: 1.0,
@@ -105,13 +144,53 @@ impl Default for CustomTheme {
         Self {
             media: Vec::new(),
             ratio: "2:1".into(),
-            play_mode: "Single".into(),
-            color: "#000000".into(),
-            align: "Left".into(),
+            play_mode: PLAY_MODES[0].into(),
+            style: OverlayStyle::default(),
             overlay: Vec::new(),
             unknown_fields: Map::new(),
         }
     }
+}
+
+impl Default for OverlayStyle {
+    fn default() -> Self {
+        Self { color: LIGHT_TEXT.into(), align: ALIGNMENTS[0].into(), filter: Filter::default(), badges: Vec::new() }
+    }
+}
+
+impl Default for Filter {
+    fn default() -> Self {
+        Self { value: None, opacity: 100 }
+    }
+}
+
+impl OverlayStyle {
+    /// Badges that can be shown: KANALI only allows a CPU (GPU) badge while a CPU (GPU) stat is chosen.
+    pub fn shown_badges(&self, overlay: &[String]) -> Vec<String> {
+        self.badges.iter().filter(|badge| badge_is_available(badge, overlay)).cloned().collect()
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        require(ALIGNMENTS.contains(&self.align.as_str()), "align must be Left, Center or Right")?;
+        require(is_hex_color(&self.color), "colour must look like #dcdcdc")?;
+        require(self.filter.value.as_deref().is_none_or(|filter| FILTERS.contains(&filter)), "filter must be Rain or Smoke")?;
+        require(self.filter.opacity <= 100, "filter opacity must be between 0 and 100")?;
+        require(self.badges.iter().all(|badge| [CPU_BADGE, GPU_BADGE].contains(&badge.as_str())), "unknown badge")
+    }
+}
+
+/// "Pre-set 12: Cyber Bunker" -> "Cyber Bunker".
+pub fn preset_name(preset: &str) -> &str {
+    preset.split_once(": ").map_or(preset, |(_, name)| name)
+}
+
+pub fn badge_is_available(badge: &str, overlay: &[String]) -> bool {
+    let processor = badge.split(' ').next().unwrap_or_default();
+    overlay.iter().any(|field| field.contains(processor))
+}
+
+fn is_hex_color(text: &str) -> bool {
+    text.len() == 7 && text.starts_with('#') && text[1..].chars().all(|c| c.is_ascii_hexdigit())
 }
 
 impl Default for Fan {
@@ -138,6 +217,23 @@ impl Settings {
         if self.is_custom_theme() { &mut self.custom.overlay } else { &mut self.overlay }
     }
 
+    pub fn active_style(&self) -> &OverlayStyle {
+        if self.is_custom_theme() { &self.custom.style } else { &self.overlay_style }
+    }
+
+    /// Index into `PRESETS` of the theme on the screen, unless it shows your own media.
+    pub fn preset_index(&self) -> Option<usize> {
+        PRESETS.iter().position(|preset| *preset == self.theme)
+    }
+
+    pub fn is_mirrored(&self) -> bool {
+        self.rotate == MIRRORED_ROTATION
+    }
+
+    pub fn set_mirrored(&mut self, mirrored: bool) {
+        self.rotate = if mirrored { MIRRORED_ROTATION } else { NORMAL_ROTATION };
+    }
+
     pub fn add_custom_media(&mut self, names: Vec<String>, append: bool) {
         if !append {
             self.custom.media.clear();
@@ -155,7 +251,9 @@ impl Settings {
         require([CELSIUS, FAHRENHEIT].contains(&self.temperature_unit.as_str()), "unknown temperature unit")?;
         require([SMART_MODE, FIXED_MODE].contains(&self.fan.mode.as_str()), "unknown fan mode")?;
         require(self.fan.fixed_percent <= 100, "fixed fan speed must be between 0 and 100")?;
-        require(ALIGNMENTS.contains(&self.custom.align.as_str()), "align must be Left, Center or Right")?;
+        require(PLAY_MODES.contains(&self.custom.play_mode.as_str()), "play mode must be Single, Shuffle or Loop")?;
+        self.overlay_style.validate()?;
+        self.custom.style.validate()?;
         require(overlay_is_valid(&self.overlay) && overlay_is_valid(&self.custom.overlay), "overlay: up to 3 known fields")?;
         require(self.update_interval_seconds >= 0.2, "update interval must be at least 0.2 s")
     }
@@ -303,5 +401,37 @@ pub(crate) mod tests {
         assert_eq!(settings.custom.media, ["a.gif", "b.mp4"]);
         assert_eq!(settings.custom.play_mode, "Loop");
         assert!(settings.is_custom_theme());
+    }
+
+    #[test]
+    fn custom_style_keeps_kanalis_flat_fields() {
+        let settings: Settings = serde_json::from_str(KANALI_SETTINGS).unwrap();
+        assert_eq!((settings.custom.style.color.as_str(), settings.custom.style.align.as_str()), (LIGHT_TEXT, "Left"));
+        let saved = serde_json::to_value(&settings).unwrap();
+        assert_eq!(saved["custom"]["color"], LIGHT_TEXT);
+        assert_eq!(saved["custom"]["filter"]["opacity"], 100);
+    }
+
+    #[test]
+    fn badges_need_a_matching_stat() {
+        let style = OverlayStyle { badges: vec![CPU_BADGE.into(), GPU_BADGE.into()], ..OverlayStyle::default() };
+        assert_eq!(style.shown_badges(&["CPU Temperature".into(), DATE_AND_TIME.into()]), [CPU_BADGE]);
+        assert!(style.shown_badges(&[]).is_empty());
+    }
+
+    #[test]
+    fn mirror_mode_switches_between_two_rotations() {
+        let mut settings = Settings { rotate: NORMAL_ROTATION, ..Settings::default() };
+        settings.set_mirrored(true);
+        assert_eq!((settings.rotate, settings.is_mirrored()), (MIRRORED_ROTATION, true));
+        settings.set_mirrored(false);
+        assert_eq!(settings.rotate, NORMAL_ROTATION);
+    }
+
+    #[test]
+    fn rejects_unknown_filter() {
+        let mut settings = Settings::default();
+        settings.overlay_style.filter.value = Some("Snow".into());
+        assert!(settings.validate().is_err());
     }
 }

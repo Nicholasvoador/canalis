@@ -5,7 +5,7 @@
   "brightness": 100,
   "rotate": 270,
   "theme": "Customization",
-  "overlay": [],
+  "overlay": ["CPU Temperature", "GPU Temperature"],
   "custom": {
     "media": ["2025-09-24_10-13-29-032.gif"],
     "ratio": "2:1",
