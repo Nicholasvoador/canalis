@@ -18,7 +18,7 @@ The script:
 - builds a release binary to `~/.local/bin/panorama`;
 - adds a udev rule so your user can reach the screen without root;
 - copies your KANALI settings (rotation 270°, your GIF, CPU/GPU temperature overlay);
-- adds **Panorama** to the app launcher;
+- adds **Panorama** to the app launcher, with its icon;
 - enables `panorama.service`, a systemd **user** service that starts with your desktop session (`graphical-session.target`, which Omarchy's uwsm session provides). Its tray icon appears in Waybar's tray.
 
 Remove it with `./uninstall.sh` (your settings are kept).

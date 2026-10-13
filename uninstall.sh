@@ -5,7 +5,7 @@ set -euo pipefail
 systemctl --user disable --now panorama.service 2>/dev/null || true
 rm -f "$HOME/.config/systemd/user/panorama.service"
 systemctl --user daemon-reload
-rm -f "$HOME/.local/bin/panorama" "$HOME/.local/share/applications/panorama.desktop"
+rm -f "$HOME/.local/bin/panorama" "$HOME/.local/share/applications/panorama.desktop" "$HOME/.local/share/icons/hicolor/256x256/apps/panorama.png"
 sudo rm -f /etc/udev/rules.d/70-tryx-panorama.rules
 sudo udevadm control --reload
 sudo rm -f /etc/modprobe.d/panorama-nct6683.conf /etc/modules-load.d/panorama-nct6683.conf

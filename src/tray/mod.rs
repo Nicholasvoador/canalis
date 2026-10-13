@@ -2,7 +2,6 @@
 //! its menu to stop the service. Windows uses the notification area; Linux uses the
 //! freedesktop StatusNotifierItem protocol, which Waybar's tray shows on Omarchy.
 
-mod icon;
 #[cfg(not(windows))]
 mod linux;
 #[cfg(windows)]
@@ -13,6 +12,7 @@ use linux as platform;
 #[cfg(windows)]
 use windows as platform;
 
+use crate::app_icon as icon;
 use crate::hidden_command::hidden_command;
 
 const TOOLTIP: &str = "Panorama (cooler screen)";

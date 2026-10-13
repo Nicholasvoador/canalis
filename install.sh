@@ -4,6 +4,7 @@ set -euo pipefail
 
 SOURCE_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BINARY="$HOME/.local/bin/panorama"
+ICON="$HOME/.local/share/icons/hicolor/256x256/apps/panorama.png"
 SETTINGS_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/panorama/settings.json"
 
 install_packages() {
@@ -59,6 +60,7 @@ install_initial_settings() {
 install_desktop_entry() {
   echo "==> Adding Panorama to the app launcher"
   install -D -m 644 "$SOURCE_DIRECTORY/packaging/panorama.desktop" "$HOME/.local/share/applications/panorama.desktop"
+  "$BINARY" icon "$ICON" >/dev/null
 }
 
 install_service() {

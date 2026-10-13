@@ -26,6 +26,9 @@ pub enum Command {
         #[arg(long)]
         port: Option<String>,
     },
+    /// Write the app icon as a PNG (used by install.sh)
+    #[command(hide = true)]
+    Icon { path: std::path::PathBuf },
     /// Print the current settings
     Show,
     /// List the built-in themes

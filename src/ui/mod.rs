@@ -36,7 +36,8 @@ pub fn run(store: SettingsStore, status_path: PathBuf, start_page: StartPage) ->
             .with_title("Panorama")
             .with_app_id("panorama")
             .with_inner_size([1240.0, 840.0])
-            .with_min_inner_size([980.0, 640.0]),
+            .with_min_inner_size([980.0, 640.0])
+            .with_icon(window_icon()),
         wgpu_options: renderer(),
         ..Default::default()
     };
@@ -50,6 +51,11 @@ pub fn run(store: SettingsStore, status_path: PathBuf, start_page: StartPage) ->
         }),
     )
     .map_err(|error| error.to_string())
+}
+
+fn window_icon() -> egui::IconData {
+    use crate::app_icon::{LARGEST_SIZE, rgba};
+    egui::IconData { rgba: rgba(LARGEST_SIZE), width: LARGEST_SIZE, height: LARGEST_SIZE }
 }
 
 /// On Windows, draws through Direct3D 12 and DirectComposition, the way browsers do. The default pick there is

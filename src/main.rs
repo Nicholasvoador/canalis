@@ -1,5 +1,6 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
+mod app_icon;
 mod cli;
 mod device_config;
 mod hidden_command;
@@ -31,6 +32,7 @@ fn main() -> ExitCode {
     match Cli::parse().command.unwrap_or(Command::Ui { page: ui::StartPage::Home }) {
         Command::Ui { page } => run_window(store, page),
         Command::Service { port } => run_service(store, port),
+        Command::Icon { path } => print_outcome(app_icon::save_png(&path).map(|()| format!("wrote {}", path.display()))),
         settings_command => print_outcome(cli::run_settings_command(settings_command, &store)),
     }
 }

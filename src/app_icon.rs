@@ -1,6 +1,10 @@
-//! The tray icon, drawn in code: the sidebar's brand mark (a screen outline with a bar) in
-//! black on a lime rounded square. Shapes are anti-aliased from signed distances.
+//! The app icon (window, taskbar, tray and panorama.exe), drawn in code: the sidebar's brand mark
+//! (a screen outline with a bar) in black on a lime rounded square. Shapes are anti-aliased from signed distances.
 
+use std::path::Path;
+
+/// The largest size drawn: the window icon and the PNG for Linux launchers.
+pub const LARGEST_SIZE: u32 = 256;
 const DESIGN_SIZE: f32 = 32.0;
 const LIME: [u8; 3] = [0xDE, 0xF7, 0x50];
 const BLACK: [u8; 3] = [0x0B, 0x0B, 0x0C];
@@ -18,6 +22,14 @@ pub fn rgba(size: u32) -> Vec<u8> {
             pixel(x * scale, y * scale, scale)
         })
         .collect()
+}
+
+/// Writes the icon as a `LARGEST_SIZE` PNG, for the Linux desktop entry.
+pub fn save_png(path: &Path) -> Result<(), String> {
+    if let Some(directory) = path.parent() {
+        std::fs::create_dir_all(directory).map_err(|error| format!("{}: {error}", directory.display()))?;
+    }
+    image::save_buffer(path, &rgba(LARGEST_SIZE), LARGEST_SIZE, LARGEST_SIZE, image::ExtendedColorType::Rgba8).map_err(|error| format!("{}: {error}", path.display()))
 }
 
 /// `size`×`size` pixels, ARGB in network byte order, as the freedesktop tray protocol wants.

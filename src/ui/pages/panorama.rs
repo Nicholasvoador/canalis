@@ -9,7 +9,7 @@ use crate::settings::{
 use crate::ui::fan_curve::fan_curve_editor;
 use crate::ui::screen_preview::{parse_hex_color, screen_preview};
 use crate::ui::theme::{BORDER, CARD_RAISED, LIME, MUTED, TEXT};
-use crate::ui::widgets::{bold, card, muted, page_header, pill, primary_button, segmented, setting_row, tabs, toggle};
+use crate::ui::widgets::{bold, card, muted, page_header, pill, pill_button, primary_button, segmented, setting_row, tabs, toggle};
 use eframe::egui::{self, Align2, Color32, FontId, Sense, Stroke, StrokeKind, Ui, vec2};
 
 const THEME_TILE: egui::Vec2 = egui::Vec2::new(200.0, 112.0);
@@ -197,7 +197,7 @@ fn overlay_settings(ui: &mut Ui, settings: &mut Settings) {
 fn overlay_chip(ui: &mut Ui, overlay: &mut Vec<String>, field: &str) {
     let selected = overlay.iter().any(|chosen| chosen == field);
     let full = overlay.len() >= MAX_OVERLAY_FIELDS;
-    let response = ui.add_enabled_ui(selected || !full, |ui| pill(ui, field, selected)).inner;
+    let response = ui.add_enabled(selected || !full, pill_button(field, selected));
     if response.clicked() {
         if selected {
             overlay.retain(|chosen| chosen != field);

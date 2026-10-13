@@ -97,14 +97,18 @@ pub fn segmented<T: PartialEq + Clone>(ui: &mut Ui, current: &mut T, options: &[
 }
 
 pub fn pill(ui: &mut Ui, label: &str, selected: bool) -> Response {
+    ui.add(pill_button(label, selected))
+}
+
+/// Pills keep their label on one line, so a wrapped row moves a whole pill to the next line.
+pub fn pill_button(label: &str, selected: bool) -> egui::Button<'_> {
     let (fill, text_color) = if selected { (LIME, theme::BLACK) } else { (theme::CARD_RAISED, TEXT) };
-    ui.add(
-        egui::Button::new(RichText::new(label).color(text_color))
-            .fill(fill)
-            .stroke(Stroke::new(1.0, if selected { LIME } else { BORDER }))
-            .corner_radius(CornerRadius::same(18))
-            .min_size(vec2(56.0, 32.0)),
-    )
+    egui::Button::new(RichText::new(label).color(text_color))
+        .wrap_mode(egui::TextWrapMode::Extend)
+        .fill(fill)
+        .stroke(Stroke::new(1.0, if selected { LIME } else { BORDER }))
+        .corner_radius(CornerRadius::same(18))
+        .min_size(vec2(56.0, 32.0))
 }
 
 pub fn primary_button(ui: &mut Ui, label: &str) -> Response {
