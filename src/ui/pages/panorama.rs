@@ -13,7 +13,11 @@ use crate::ui::format::field_title;
 use crate::ui::screen_preview::{parse_hex_color, screen_preview};
 use crate::ui::theme::{BORDER, LIME, MUTED};
 use crate::ui::widgets::{bold, card, muted, page_header, pill, pill_button, primary_button, segmented, setting_row, tabs, toggle};
-use eframe::egui::{self, Color32, Sense, Stroke, StrokeKind, Ui, vec2};
+use eframe::egui::style::HandleShape;
+use eframe::egui::{self, Align2, Color32, Sense, Stroke, StrokeKind, Ui, vec2};
+
+const STYLE_LABEL_WIDTH: f32 = 104.0;
+const STYLE_ROW_HEIGHT: f32 = 32.0;
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum PanoramaTab {
@@ -139,9 +143,8 @@ fn media_list(ui: &mut Ui, settings: &mut Settings) {
     if let Some(index) = remove {
         settings.custom.media.remove(index);
     }
-    ui.add_space(6.0);
-    ui.horizontal(|ui| {
-        ui.label("Play mode");
+    ui.add_space(10.0);
+    style_row(ui, "Play mode", |ui| {
         let options: Vec<(String, String)> = PLAY_MODES.iter().map(|mode| (mode.to_string(), mode.to_string())).collect();
         segmented(ui, &mut settings.custom.play_mode, &options);
     });
@@ -154,36 +157,46 @@ fn stats_card(ui: &mut Ui, overlay: &mut Vec<String>, style: &mut OverlayStyle) 
             ui.label(bold("System Information Display", 19.0));
             ui.label(muted(format!("Select up to {MAX_OVERLAY_FIELDS} items")));
         });
-        ui.add_space(10.0);
-        style_controls(ui, style, overlay);
-        ui.add_space(12.0);
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+        ui.add_space(14.0);
+        style_row(ui, "Stats", |ui| {
             for field in OVERLAY_FIELDS {
                 overlay_chip(ui, overlay, field);
+            }
+        });
+        style_row(ui, "Text colour", |ui| colour_swatches(ui, &mut style.color));
+        style_row(ui, "Alignment", |ui| {
+            let alignments: Vec<(String, String)> = ALIGNMENTS.iter().map(|align| (align.to_string(), align.to_string())).collect();
+            segmented(ui, &mut style.align, &alignments);
+        });
+        style_row(ui, "Filter", |ui| filter_controls(ui, &mut style.filter));
+        style_row(ui, "Badges", |ui| {
+            for badge in [CPU_BADGE, GPU_BADGE] {
+                badge_chip(ui, &mut style.badges, badge, badge_is_available(badge, overlay));
             }
         });
     });
 }
 
-fn style_controls(ui: &mut Ui, style: &mut OverlayStyle, overlay: &[String]) {
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = vec2(10.0, 8.0);
-        for color in [DARK_TEXT, LIGHT_TEXT] {
-            if colour_swatch(ui, color, style.color == color).clicked() {
-                style.color = color.into();
-            }
-        }
-        ui.add_space(14.0);
-        let alignments: Vec<(String, String)> = ALIGNMENTS.iter().map(|align| (align.to_string(), align.to_string())).collect();
-        segmented(ui, &mut style.align, &alignments);
-        ui.add_space(14.0);
-        filter_controls(ui, &mut style.filter);
-        ui.add_space(14.0);
-        for badge in [CPU_BADGE, GPU_BADGE] {
-            badge_chip(ui, &mut style.badges, badge, badge_is_available(badge, overlay));
-        }
+/// A label column on the left, then the row's controls, wrapping onto more 32-point lines.
+fn style_row(ui: &mut Ui, label: &str, add_contents: impl FnOnce(&mut Ui)) {
+    ui.horizontal_top(|ui| {
+        let (label_rect, _) = ui.allocate_exact_size(vec2(STYLE_LABEL_WIDTH, STYLE_ROW_HEIGHT), Sense::hover());
+        ui.painter().text(label_rect.left_center(), Align2::LEFT_CENTER, label, egui::TextStyle::Body.resolve(ui.style()), MUTED);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().interact_size.y = STYLE_ROW_HEIGHT;
+            ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+            add_contents(ui);
+        });
     });
+    ui.add_space(12.0);
+}
+
+fn colour_swatches(ui: &mut Ui, current: &mut String) {
+    for color in [DARK_TEXT, LIGHT_TEXT] {
+        if colour_swatch(ui, color, *current == color).clicked() {
+            *current = color.into();
+        }
+    }
 }
 
 fn colour_swatch(ui: &mut Ui, color: &str, selected: bool) -> egui::Response {
@@ -198,9 +211,13 @@ fn filter_controls(ui: &mut Ui, filter: &mut Filter) {
     let mut options = vec![(None, "No filter".to_string())];
     options.extend(FILTERS.iter().map(|name| (Some(name.to_string()), name.to_string())));
     segmented(ui, &mut filter.value, &options);
-    ui.spacing_mut().slider_width = 100.0;
-    let slider = egui::Slider::new(&mut filter.opacity, 0..=100).step_by(25.0).suffix("%");
-    ui.add_enabled(filter.value.is_some(), slider).on_hover_text("Filter opacity");
+    ui.add_space(12.0);
+    ui.add_enabled_ui(filter.value.is_some(), |ui| {
+        ui.label(muted("Opacity"));
+        ui.spacing_mut().slider_width = 110.0;
+        ui.add(egui::Slider::new(&mut filter.opacity, 0..=100).step_by(25.0).show_value(false).handle_shape(HandleShape::Circle));
+        ui.add_sized(vec2(40.0, STYLE_ROW_HEIGHT), egui::Label::new(format!("{}%", filter.opacity)));
+    });
 }
 
 fn badge_chip(ui: &mut Ui, badges: &mut Vec<String>, badge: &str, available: bool) {
