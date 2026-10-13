@@ -52,7 +52,7 @@ pub fn tabs<T: PartialEq + Copy>(ui: &mut Ui, current: &mut T, options: &[(T, &s
         for (value, label) in options {
             let selected = *current == *value;
             let text = if selected { bold(*label, 15.0) } else { RichText::new(*label).size(15.0).color(MUTED) };
-            let response = ui.add(egui::Label::new(text).sense(Sense::click()));
+            let response = ui.add(egui::Label::new(text).selectable(false).sense(Sense::click()));
             if selected {
                 let underline = egui::Rect::from_min_size(pos2(response.rect.left(), response.rect.bottom() + 5.0), vec2(22.0, 3.0));
                 ui.painter().rect_filled(underline, 2, LIME);

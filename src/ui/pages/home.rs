@@ -45,9 +45,9 @@ pub fn show(ui: &mut Ui, tab: &mut HomeTab, page: &mut PageContext) {
 
 fn connection_status(ui: &mut Ui, page: &PageContext) {
     if page.connected() {
-        status_dot(ui, OK, &format!("Connected on {}", page.status.text("/port")));
+        status_dot(ui, OK, "Cooler screen connected");
     } else if page.service_running() {
-        status_dot(ui, LIME, "Service running, looking for the screen…");
+        status_dot(ui, LIME, "Looking for the cooler screen…");
     } else {
         status_dot(ui, DANGER, "Service not running — start it in SETTING");
     }
