@@ -295,15 +295,13 @@ fn fan_settings(ui: &mut Ui, page: &mut PageContext) {
             ui.add(egui::Slider::new(&mut fan.fixed_percent, 0..=100).suffix("%").text("Fan speed"));
             return;
         }
-        ui.horizontal(|ui| {
-            ui.label("Start from");
+        style_row(ui, "Start from", |ui| {
             for preset in FanCurvePreset::ALL {
                 if pill(ui, preset.label(), fan.smart_curve == preset.curve()).clicked() {
                     fan.smart_curve = preset.curve();
                 }
             }
         });
-        ui.add_space(10.0);
         page.interacting |= fan_curve_editor(ui, &mut fan.smart_curve, current_temperature);
         ui.label(muted("Drag the points. Temperatures are CPU °C; values are fan %.").size(12.5));
     });

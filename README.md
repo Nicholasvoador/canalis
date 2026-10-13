@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/banner.svg" alt="Canalis: control the TRYX Panorama cooler screen on Windows and Linux" width="100%"></p>
+
 # Canalis
 
 **Canalis** (Latin for "channel", the most likely meaning of KANALI) is a native replacement for TRYX **KANALI** on **Linux and Windows**, for the **TRYX Panorama** cooler screen. It's written in Rust: one program with a desktop window, a background service and a command line.
@@ -6,6 +8,25 @@
 - **Background service:** keeps the screen configured and sends it live CPU/GPU/RAM/disk/network stats every second, even when the window is closed. It starts when you log in, like KANALI's "Startup with Windows", and shows a tray icon: click it to open the window, or choose **Quit** to stop it until the next login.
 - **Command line:** change any setting from a terminal or a keybinding.
 
+## Screenshots
+
+| Dashboard | Built-in themes |
+| --- | --- |
+| ![The dashboard: network graphs, CPU and GPU load gauges, memory and disk bars](docs/screenshots/home.png) | ![The PANORAMA page: a carousel of the 14 built-in themes and the stats options](docs/screenshots/presets.png) |
+| **Your own media** | **Fan** |
+| ![Customization: a preview of the screen with live stats over your own GIF, and your media list](docs/screenshots/customization.png) | ![Fan settings: smart mode with an editable fan curve, or a fixed speed](docs/screenshots/fan.png) |
+
+## Download
+
+Get the latest build from [Releases](https://github.com/sallen2/panorama/releases/latest):
+
+- **Windows:** `canalis-<version>-windows-x64.zip`. Unzip it and run `install-windows.ps1` from PowerShell in that folder (below).
+- **Linux:** `canalis-<version>-linux-x64.tar.gz`. Extract it and run `./install.sh` in that folder (below).
+
+`SHA256SUMS.txt` lists each download's checksum. The installers use the included program, so Rust isn't needed. In a copy of this repository, they build it from source instead.
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`) when a version tag such as `v0.4.0` is pushed. They are saved as drafts to review and publish.
+
 ## Install on Linux (Omarchy / Arch)
 
 ```bash
@@ -13,9 +34,9 @@
 ```
 
 The script:
-- installs `rust`, `android-tools` (adb) and `lm_sensors` with pacman;
+- installs `android-tools` (adb) and `lm_sensors` with pacman, plus `rust` when building from source;
 - sets up the motherboard's sensor driver so fan speeds and board temperature can be read (`sensors-detect`; on MSI boards it also enables `nct6683` with `force=1`). CPU and NVMe temperatures work without extra setup;
-- builds a release binary to `~/.local/bin/canalis`;
+- installs the program to `~/.local/bin/canalis` (building it first in a source checkout);
 - adds a udev rule so your user can reach the screen without root;
 - copies your KANALI settings (rotation 270°, your GIF, CPU/GPU temperature overlay);
 - adds **Canalis** to the app launcher, with its icon;
@@ -25,15 +46,14 @@ Remove it with `./uninstall.sh` (your settings are kept).
 
 ## Install on Windows
 
-From PowerShell in this folder:
+From PowerShell in the unzipped release (or a copy of this repository):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
 ```
 
 Everything it needs comes from winget, so there is nothing to install first. The script:
-- installs Rust (`Rustlang.Rustup`), plus the Microsoft C++ build tools Rust needs if they're missing (a large download);
-- builds a release binary to `%LOCALAPPDATA%\Programs\Canalis\canalis.exe`;
+- installs the program to `%LOCALAPPDATA%\Programs\Canalis\canalis.exe`. In a source checkout it first installs Rust (`Rustlang.Rustup`) and, if they're missing, the Microsoft C++ build tools Rust needs (a large download), then builds it;
 - turns off KANALI's start with Windows and asks you to quit KANALI (both apps can't share the screen's port);
 - copies your KANALI settings;
 - adds **Canalis** to the Start menu;
