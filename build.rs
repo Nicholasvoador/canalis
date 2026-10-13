@@ -20,6 +20,8 @@ fn main() {
     write_icon(&icon_file).expect("cannot write canalis.ico");
     winresource::WindowsResource::new()
         .set_icon(&icon_file.to_string_lossy())
+        .set("ProductName", "Canalis")
+        .set("FileDescription", "Canalis")
         .compile()
         .expect("cannot embed the icon in canalis.exe (needs the Windows SDK's rc.exe)");
 }

@@ -98,16 +98,6 @@ function Disable-Kanali {
     }
 }
 
-function Install-InitialSettings {
-    if (Test-Path $SettingsFile) {
-        Write-Host "==> Keeping existing settings at $SettingsFile"
-        return
-    }
-    Write-Host "==> Copying your KANALI settings to $SettingsFile"
-    New-Item -ItemType Directory -Force (Split-Path $SettingsFile) | Out-Null
-    Copy-Item (Join-Path $SourceDirectory 'packaging\settings-from-kanali.json') $SettingsFile
-}
-
 function Install-StartMenuShortcut {
     Write-Host '==> Adding Canalis to the Start menu'
     $link = (New-Object -ComObject WScript.Shell).CreateShortcut($Shortcut)
@@ -181,7 +171,6 @@ Stop-RunningCanalis
 Remove-OldPanoramaInstall
 Install-Binary $builtBinary
 Disable-Kanali
-Install-InitialSettings
 Install-StartMenuShortcut
 Enable-LoginStart
 Install-Companions

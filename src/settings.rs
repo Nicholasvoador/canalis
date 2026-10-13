@@ -127,7 +127,7 @@ impl Default for Settings {
             enable: true,
             display_in_sleep: false,
             brightness: 100,
-            rotate: 0,
+            rotate: NORMAL_ROTATION,
             theme: PRESETS[0].into(),
             overlay: Vec::new(),
             overlay_style: OverlayStyle::default(),
@@ -344,7 +344,7 @@ pub fn write_atomically(path: &Path, text: &str) -> std::io::Result<()> {
 pub(crate) mod tests {
     use super::*;
 
-    pub const KANALI_SETTINGS: &str = include_str!("../packaging/settings-from-kanali.json");
+    pub const KANALI_SETTINGS: &str = include_str!("testdata/kanali-settings.json");
 
     pub fn temporary_path(name: &str) -> PathBuf {
         let directory = std::env::temp_dir().join(format!("canalis-test-{name}-{}", std::process::id()));

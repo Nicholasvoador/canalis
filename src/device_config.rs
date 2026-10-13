@@ -64,7 +64,7 @@ mod tests {
     // Body KANALI 1.2.1 sent with "POST config 1" on this machine, minus "turboPump".
     const KANALI_CONFIG: &str = r##"{"temperature":"Celsius","waterBlockScreen":{"enable":true,"displayInSleep":false,
         "brightness":100,"rotate":270,"id":{"id":"Customization","screenMode":"Full Screen","playMode":"Single",
-        "ratio":"2:1","media":["2025-09-24_10-13-29-032.gif"],"settings":{"color":"#dcdcdc","align":"Left",
+        "ratio":"2:1","media":["loop.gif"],"settings":{"color":"#dcdcdc","align":"Left",
         "filter":{"value":null,"opacity":100},"badges":[]},"sysinfoDisplay":["CPU Temperature","GPU Temperature"]},
         "fanLCD":{"mode":"Smart Mode","smartMode":[[0,10],[10,20],[30,30],[50,40],[65,55],[80,70],[90,100],[100,100]],
         "fixedMode":40}},"spec":{"cpu":"AMD Ryzen 7 9800X3D","gpu":"NVIDIA GeForce RTX 5090"}}"##;

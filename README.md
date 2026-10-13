@@ -47,3 +47,20 @@ cargo run --release
 ```
 
 The install scripts build Canalis themselves when run from a copy of this repository. [How it works](docs/how-it-works.md) covers the screen's protocol, what was learned from KANALI, and known gaps.
+
+## Privacy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Canalis talks only to the cooler over USB and, on Windows, to LibreHardwareMonitor on `127.0.0.1`. The installers download adb and LibreHardwareMonitor from their publishers through winget (Windows) or pacman (Linux).
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org). (Applied for; v0.4.0 is not signed yet.)
+
+Only Windows releases built by this repository's [release workflow](.github/workflows/release.yml) from a version tag are signed, and every signing request is approved by hand.
+
+- Committers and reviewers: [@sallen2](https://github.com/sallen2)
+- Approvers: [@sallen2](https://github.com/sallen2)
+
+## License
+
+[MIT](LICENSE)

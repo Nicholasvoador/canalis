@@ -7,7 +7,6 @@ SOURCE_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BINARY="$HOME/.local/bin/canalis"
 ICON="$HOME/.local/share/icons/hicolor/256x256/apps/canalis.png"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-SETTINGS_FILE="$CONFIG_HOME/canalis/settings.json"
 PREBUILT="$SOURCE_DIRECTORY/canalis"
 
 install_packages() {
@@ -58,15 +57,6 @@ install_udev_rule() {
   sudo udevadm trigger --subsystem-match=tty --subsystem-match=usb
 }
 
-install_initial_settings() {
-  if [[ -f "$SETTINGS_FILE" ]]; then
-    echo "==> Keeping existing settings at $SETTINGS_FILE"
-    return
-  fi
-  echo "==> Copying your KANALI settings to $SETTINGS_FILE"
-  install -D -m 644 "$SOURCE_DIRECTORY/packaging/settings-from-kanali.json" "$SETTINGS_FILE"
-}
-
 install_desktop_entry() {
   echo "==> Adding Canalis to the app launcher"
   install -D -m 644 "$SOURCE_DIRECTORY/packaging/canalis.desktop" "$HOME/.local/share/applications/canalis.desktop"
@@ -101,7 +91,6 @@ remove_old_panorama_install
 detect_hardware_sensors
 build_and_install_binary
 install_udev_rule
-install_initial_settings
 install_desktop_entry
 install_service
 echo

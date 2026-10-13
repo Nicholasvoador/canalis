@@ -35,7 +35,7 @@ jobs:
         run: |
           New-Item -ItemType Directory stage\packaging | Out-Null
           Copy-Item target\release\canalis.exe, install-windows.ps1, uninstall-windows.ps1 stage
-          Copy-Item packaging\windows-hardware-monitor.ps1, packaging\settings-from-kanali.json stage\packaging
+          Copy-Item packaging\windows-hardware-monitor.ps1 stage\packaging
           $icon = (Get-ChildItem target\release\build\canalis-*\out\canalis.ico | Select-Object -First 1).FullName
           $version = $env:TAG.TrimStart('v')
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "/DSourceDir=$PWD\stage" "/DIconFile=$icon" "/DOutputDir=$PWD" packaging\windows-installer.iss
@@ -61,7 +61,7 @@ jobs:
           name="canalis-$TAG-linux-x64"
           mkdir -p "$name/packaging"
           cp target/release/canalis install.sh uninstall.sh README.md "$name/"
-          cp packaging/70-tryx-panorama.rules packaging/canalis.desktop packaging/canalis.service packaging/settings-from-kanali.json "$name/packaging/"
+          cp packaging/70-tryx-panorama.rules packaging/canalis.desktop packaging/canalis.service "$name/packaging/"
           tar -czf "$name.tar.gz" "$name"
       - uses: actions/upload-artifact@v4
         with:

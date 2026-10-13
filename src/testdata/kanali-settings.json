@@ -7,7 +7,7 @@
   "theme": "Customization",
   "overlay": ["CPU Temperature", "GPU Temperature"],
   "custom": {
-    "media": ["2025-09-24_10-13-29-032.gif"],
+    "media": ["loop.gif"],
     "ratio": "2:1",
     "play_mode": "Single",
     "color": "#dcdcdc",

@@ -158,10 +158,10 @@ mod tests {
 
     #[test]
     fn picks_the_cooler_among_other_devices() {
-        let listing = "List of devices attached\nBYZL25040200101181     device product:cm01 model:cm01 device:cm01 transport_id:1\nemulator-5562          offline transport_id:28\n";
-        assert_eq!(cooler_serial(listing).as_deref(), Some("BYZL25040200101181"));
-        let phone_and_cooler = "List of devices attached\nR58M  device model:SM_G991B\nBYZL  device model:cm01\n";
-        assert_eq!(cooler_serial(phone_and_cooler).as_deref(), Some("BYZL"));
+        let listing = "List of devices attached\nCM0100000000000001     device product:cm01 model:cm01 device:cm01 transport_id:1\nemulator-5562          offline transport_id:28\n";
+        assert_eq!(cooler_serial(listing).as_deref(), Some("CM0100000000000001"));
+        let phone_and_cooler = "List of devices attached\nR58M  device model:SM_G991B\nCM01  device model:cm01\n";
+        assert_eq!(cooler_serial(phone_and_cooler).as_deref(), Some("CM01"));
         assert_eq!(cooler_serial("List of devices attached\nA device model:x\nB device model:y\n"), None);
     }
 
