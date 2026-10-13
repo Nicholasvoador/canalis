@@ -1,0 +1,10 @@
+[Unit]
+Description=TRYX Panorama cooler screen (live stats and settings)
+
+[Service]
+ExecStart=%h/.local/bin/panorama service
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

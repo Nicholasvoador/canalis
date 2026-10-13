@@ -1,0 +1,23 @@
+{
+  "temperature_unit": "Celsius",
+  "enable": true,
+  "display_in_sleep": false,
+  "brightness": 100,
+  "rotate": 270,
+  "theme": "Customization",
+  "overlay": [],
+  "custom": {
+    "media": ["2025-09-24_10-13-29-032.gif"],
+    "ratio": "2:1",
+    "play_mode": "Single",
+    "color": "#dcdcdc",
+    "align": "Left",
+    "overlay": ["CPU Temperature", "GPU Temperature"]
+  },
+  "fan": {
+    "mode": "Smart Mode",
+    "smart_curve": [[0, 10], [10, 20], [30, 30], [50, 40], [65, 55], [80, 70], [90, 100], [100, 100]],
+    "fixed_percent": 40
+  },
+  "update_interval_seconds": 1.0
+}

@@ -1,0 +1,4 @@
+# TRYX Panorama cooler screen (USB 18d1:2d03): serial control port + ADB.
+# Grants the logged-in desktop user access and keeps ModemManager away from the serial port.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="18d1", ATTRS{idProduct}=="2d03", TAG+="uaccess", ENV{ID_MM_DEVICE_IGNORE}="1", SYMLINK+="tryx-panorama"
+SUBSYSTEM=="usb", ATTR{idVendor}=="18d1", ATTR{idProduct}=="2d03", TAG+="uaccess"

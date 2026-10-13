@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Panorama
+GenericName=Cooler screen control
+Comment=Configure the TRYX Panorama cooler screen
+Exec=panorama
+Icon=video-display
+Terminal=false
+Categories=Settings;HardwareSettings;
+StartupWMClass=panorama
