@@ -1,12 +1,6 @@
 <p align="center"><img src="docs/banner.svg" alt="Canalis: control the TRYX Panorama cooler screen on Windows and Linux" width="100%"></p>
 
-# Canalis
-
-**Canalis** (Latin for "channel", the most likely meaning of KANALI) is a native replacement for TRYX **KANALI** on **Linux and Windows**, for the **TRYX Panorama** cooler screen. It's written in Rust: one program with a desktop window, a background service and a command line.
-
-- **Window:** laid out like KANALI: a dashboard; a PANORAMA page with the 14 built-in themes in a carousel, your own media, the live stats drawn over either (colour, alignment, rain or smoke filter, CPU/GPU badges, Date & Time), and a preview that can show live screenshots of the cooler; screen and fan settings. It uses egui (native, no Electron, no web view).
-- **Background service:** keeps the screen configured and sends it live CPU/GPU/RAM/disk/network stats every second, even when the window is closed. It starts when you log in, like KANALI's "Startup with Windows", and shows a tray icon: click it to open the window, or choose **Quit** to stop it until the next login.
-- **Command line:** change any setting from a terminal or a keybinding.
+A native replacement for TRYX **KANALI** for the **TRYX Panorama** cooler screen, on Windows and Linux. A background service keeps the screen showing live stats, and the window or command line changes its theme, media and fan.
 
 ## Screenshots
 
@@ -18,7 +12,7 @@
 
 ## Download
 
-Get the latest build from [Releases](https://github.com/sallen2/panorama/releases/latest):
+Get the latest build from [Releases](https://github.com/sallen2/canalis/releases/latest):
 
 - **Windows:** `canalis-<version>-windows-x64.zip`. Unzip it and run `install-windows.ps1` from PowerShell in that folder (below).
 - **Linux:** `canalis-<version>-linux-x64.tar.gz`. Extract it and run `./install.sh` in that folder (below).
