@@ -12,20 +12,39 @@ const GAUGE_SEGMENTS: usize = 72;
 const GAUGE_TRACK: Color32 = Color32::from_rgb(0x34, 0x37, 0x3D);
 const BAR_RADIUS: f32 = 6.0;
 
-/// Smoothed line with a fading fill under it; samples run oldest (left) to newest (right).
-pub fn sparkline(painter: &Painter, rect: Rect, samples: &[f32], color: Color32) {
-    if samples.len() < 2 {
-        return;
-    }
-    let points = smooth(&sparkline_points(rect, samples), rect.bottom());
-    painter.add(fill_under(&points, rect.bottom(), color));
-    painter.add(Shape::line(points, Stroke::new(2.0, color)));
+/// A scrolling line graph. Samples run oldest (left) to newest (right); `scroll` goes from 0 to 1
+/// while the next sample is awaited, sliding the graph one step left so each new sample glides in
+/// from the right edge instead of the whole line jumping.
+pub struct Sparkline<'a> {
+    pub samples: &'a [f32],
+    /// The value drawn at the top of the graph.
+    pub peak: f32,
+    pub scroll: f32,
+    pub color: Color32,
 }
 
-fn sparkline_points(rect: Rect, samples: &[f32]) -> Vec<Pos2> {
-    let peak = samples.iter().copied().fold(MIN_SPARKLINE_PEAK, f32::max);
-    let step = rect.width() / (samples.len() - 1) as f32;
-    samples.iter().enumerate().map(|(index, value)| pos2(rect.left() + step * index as f32, rect.bottom() - rect.height() * value / peak)).collect()
+/// The top of the graph for these samples: the largest one, or a small floor when all are quiet.
+pub fn sparkline_peak(samples: &[f32]) -> f32 {
+    samples.iter().copied().fold(MIN_SPARKLINE_PEAK, f32::max)
+}
+
+/// Smoothed line with a fading fill under it, clipped to `rect`.
+pub fn sparkline(painter: &Painter, rect: Rect, line: &Sparkline) {
+    if line.samples.len() < 3 {
+        return;
+    }
+    let points = smooth(&sparkline_points(rect, line), rect.bottom());
+    let clipped = painter.with_clip_rect(rect.expand2(vec2(0.0, 2.0)).intersect(painter.clip_rect()));
+    clipped.add(fill_under(&points, rect.bottom(), line.color));
+    clipped.add(Shape::line(points, Stroke::new(2.0, line.color)));
+}
+
+/// The newest sample sits one step past the right edge at `scroll` 0 and on it at 1.
+fn sparkline_points(rect: Rect, line: &Sparkline) -> Vec<Pos2> {
+    let step = rect.width() / (line.samples.len() - 2) as f32;
+    let peak = line.peak.max(MIN_SPARKLINE_PEAK);
+    let point = |index: usize, value: f32| pos2(rect.left() + step * (index as f32 - line.scroll), rect.bottom() - rect.height() * (value / peak).min(1.0));
+    line.samples.iter().enumerate().map(|(index, value)| point(index, *value)).collect()
 }
 
 /// Catmull-Rom curve through the points, kept above `floor` so it never dips below the baseline.
@@ -186,17 +205,38 @@ fn lerp_color(from: Color32, to: Color32, amount: f32) -> Color32 {
 mod tests {
     use super::*;
 
+    fn line(samples: &[f32], scroll: f32) -> Sparkline<'_> {
+        Sparkline { samples, peak: sparkline_peak(samples), scroll, color: Color32::WHITE }
+    }
+
     #[test]
     fn sparkline_scales_the_peak_to_the_top() {
         let rect = Rect::from_min_max(pos2(0.0, 0.0), pos2(100.0, 50.0));
-        let points = sparkline_points(rect, &[0.0, 10.0, 5.0]);
-        assert_eq!(points, vec![pos2(0.0, 50.0), pos2(50.0, 0.0), pos2(100.0, 25.0)]);
+        let points = sparkline_points(rect, &line(&[0.0, 10.0, 5.0], 1.0));
+        assert_eq!(points, vec![pos2(-100.0, 50.0), pos2(0.0, 0.0), pos2(100.0, 25.0)]);
+    }
+
+    #[test]
+    fn new_samples_scroll_in_from_the_right_edge() {
+        let rect = Rect::from_min_max(pos2(0.0, 0.0), pos2(100.0, 50.0));
+        let arriving = sparkline_points(rect, &line(&[0.0, 10.0, 5.0], 0.0));
+        assert_eq!(arriving[0].x, 0.0);
+        assert_eq!(arriving[2].x, 200.0);
+        assert_eq!(sparkline_points(rect, &line(&[0.0, 10.0, 5.0], 0.5))[2].x, 150.0);
     }
 
     #[test]
     fn quiet_sparkline_stays_near_the_baseline() {
         let rect = Rect::from_min_max(pos2(0.0, 0.0), pos2(100.0, 50.0));
-        assert_eq!(sparkline_points(rect, &[0.0, 0.1])[1], pos2(100.0, 45.0));
+        assert_eq!(sparkline_points(rect, &line(&[0.0, 0.0, 0.1], 1.0))[2], pos2(100.0, 45.0));
+    }
+
+    #[test]
+    fn values_above_an_easing_peak_stay_inside_the_graph() {
+        let rect = Rect::from_min_max(pos2(0.0, 0.0), pos2(100.0, 50.0));
+        let samples = [0.0, 0.0, 20.0];
+        let points = sparkline_points(rect, &Sparkline { samples: &samples, peak: 10.0, scroll: 1.0, color: Color32::WHITE });
+        assert_eq!(points[2].y, 0.0);
     }
 
     #[test]

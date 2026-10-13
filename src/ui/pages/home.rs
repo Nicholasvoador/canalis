@@ -2,13 +2,14 @@
 
 use super::PageContext;
 use crate::status::LiveStatus;
-use crate::ui::charts::{self, GradientFill};
+use crate::ui::charts::{self, GradientFill, Sparkline};
 use crate::ui::format;
 use crate::ui::icons::{self, Icon};
 use crate::ui::network_history::NetworkHistory;
 use crate::ui::theme::{self, CARD_RAISED, DANGER, DOWNLOAD_GREEN, LIME, MUTED, OK, ORANGE, TEXT, UPLOAD_BLUE};
 use crate::ui::widgets::{bold, card, card_at, card_content_height, divider, info_line, muted, page_header, status_dot, tabs};
-use eframe::egui::{self, Align, Align2, Color32, FontId, Layout, Painter, Pos2, Rect, Sense, Ui, pos2, vec2};
+use eframe::egui::{self, Align, Align2, Color32, FontId, Id, Layout, Painter, Pos2, Rect, Sense, Ui, pos2, vec2};
+use std::time::Duration;
 
 const CARD_GAP: f32 = 20.0;
 const MIN_COLUMN_WIDTH: f32 = 230.0;
@@ -20,6 +21,10 @@ const NETWORK_LABEL_HEIGHT: f32 = 26.0;
 const SPEC_CARD_MIN_WIDTH: f32 = 360.0;
 const MEMORY_GRADIENT: [Color32; 2] = [CARD_RAISED, LIME];
 const DISK_GRADIENT: [Color32; 3] = [CARD_RAISED, LIME, ORANGE];
+/// How long a reading takes to glide to its new value.
+const EASE_SECONDS: f32 = 0.6;
+/// The network graphs scroll at about 60 frames a second.
+const SCROLL_FRAME_INTERVAL: Duration = Duration::from_millis(16);
 
 #[derive(Clone, Copy, PartialEq, Default)]
 pub enum HomeTab {
@@ -122,9 +127,9 @@ fn network_card(ui: &mut Ui, network: &NetworkHistory) {
     ui.label(bold("Network Status", 19.0));
     ui.add_space(8.0);
     let (download_area, upload_area) = split_network_area(ui.available_rect_before_wrap());
-    let painter = ui.painter();
-    network_graph(painter, download_area, &NetworkSeries { name: "Download", samples: network.download(), color: DOWNLOAD_GREEN, icon: icons::arrow_down });
-    network_graph(painter, upload_area, &NetworkSeries { name: "Upload", samples: network.upload(), color: UPLOAD_BLUE, icon: icons::arrow_up });
+    network_graph(ui, download_area, network, &NetworkSeries { name: "Download", samples: network.download(), color: DOWNLOAD_GREEN, icon: icons::arrow_down });
+    network_graph(ui, upload_area, network, &NetworkSeries { name: "Upload", samples: network.upload(), color: UPLOAD_BLUE, icon: icons::arrow_up });
+    ui.ctx().request_repaint_after(SCROLL_FRAME_INTERVAL);
 }
 
 /// Graphs side by side in a wide, short card; stacked otherwise.
@@ -138,12 +143,15 @@ fn split_network_area(region: Rect) -> (Rect, Rect) {
     }
 }
 
-fn network_graph(painter: &Painter, area: Rect, series: &NetworkSeries) {
+fn network_graph(ui: &Ui, area: Rect, network: &NetworkHistory, series: &NetworkSeries) {
+    let painter = ui.painter();
     let graph = Rect::from_min_max(area.min + vec2(0.0, 12.0), pos2(area.right(), area.bottom() - NETWORK_LABEL_HEIGHT - 8.0));
-    charts::sparkline(painter, graph, series.samples, series.color);
+    let peak = eased(ui, (series.name, "peak"), charts::sparkline_peak(series.samples) as f64) as f32;
+    charts::sparkline(painter, graph, &Sparkline { samples: series.samples, peak, scroll: network.scroll(), color: series.color });
     let label_y = area.bottom() - NETWORK_LABEL_HEIGHT / 2.0;
     (series.icon)(painter, pos2(area.left() + 10.0, label_y), series.color);
-    let (value, unit) = format::rate(series.samples.last().copied().unwrap_or(0.0) as f64);
+    let rate = eased(ui, (series.name, "rate"), series.samples.last().copied().unwrap_or(0.0) as f64);
+    let (value, unit) = format::rate(rate);
     let pieces = [
         (format!("{}: ", series.name), FontId::proportional(15.0), TEXT),
         (value, FontId::new(15.0, theme::bold_family()), TEXT),
@@ -220,17 +228,24 @@ fn disk_bar(status: &LiveStatus) -> LoadBar {
 }
 
 fn gauge_card(ui: &mut Ui, gauge: &LoadGauge) {
-    let region = card_heading(ui, gauge.load, gauge.label);
-    charts::gauge(ui.painter(), region.with_max_y(region.bottom() - FOOTER_HEIGHT), (gauge.load / 100.0) as f32);
+    let load = eased(ui, gauge.label, gauge.load);
+    let region = card_heading(ui, load, gauge.label);
+    charts::gauge(ui.painter(), region.with_max_y(region.bottom() - FOOTER_HEIGHT), (load / 100.0) as f32);
     paint_footer(ui.painter(), region, &gauge.footer);
 }
 
 fn bar_card(ui: &mut Ui, bar: &LoadBar) {
-    let region = card_heading(ui, bar.load, bar.label);
+    let load = eased(ui, bar.label, bar.load);
+    let region = card_heading(ui, load, bar.label);
     let bar_centre = pos2(region.center().x, region.top() + (region.height() - FOOTER_HEIGHT) / 2.0);
     let bar_rect = Rect::from_center_size(bar_centre, vec2(region.width(), BAR_HEIGHT));
-    charts::gradient_bar(ui.painter(), bar_rect, &GradientFill { fraction: (bar.load / 100.0) as f32, stops: bar.stops });
+    charts::gradient_bar(ui.painter(), bar_rect, &GradientFill { fraction: (load / 100.0) as f32, stops: bar.stops });
     paint_footer(ui.painter(), region, &bar.footer);
+}
+
+/// The reading `key` on its way to `target`: it glides there over `EASE_SECONDS` instead of jumping.
+fn eased(ui: &Ui, key: impl std::hash::Hash + std::fmt::Debug, target: f64) -> f64 {
+    ui.ctx().animate_value_with_time(Id::new(("dashboard", key)), target as f32, EASE_SECONDS) as f64
 }
 
 /// Big percentage and its label; returns the space left below them.
