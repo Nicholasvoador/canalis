@@ -59,12 +59,13 @@ KANALI reads its stats through the HWiNFO SDK: `lib\BYMonitor64.dll` is HWiNFO's
 
 On the real screen (firmware V1.0.11):
 - **Windows:** installed with `install-windows.ps1` in place of KANALI; the installer sets up adb, ffmpeg and LibreHardwareMonitor (with PawnIO) on its own; the service starts hidden with its tray icon, connects on COM3, applies settings and streams live CPU, memory, disk, network and GPU stats plus CPU, motherboard and NVMe temperatures, CPU power and fan speeds; start at login is registered; command-line output works.
+- **Linux (Omarchy):** the service runs from systemd `--user`, connects on `/dev/ttyACM0`, applies settings and keeps the screen fed from the hwmon sensor readers. The carousel fills in from the screen's own theme videos, and its centre card plays one. Only one program can hold the serial port, so another controller for the same screen has to be stopped first.
 - Brightness changes made from the command line reach the screen within a second, and invalid values are refused and not saved.
 - The preview pulls the GIF already on the screen over adb and plays it, with the stats in the same order and layout as the screen. Live view shows real screenshots of the screen, even with another (offline) adb device attached. The carousel takes all 14 theme pictures off the screen, and from KANALI 1.2.1 when one is installed; the card in the centre plays that theme's video. The built-in-theme message matches the one KANALI sent for Pre-set 12 with Rain, a CPU badge and Date & Time, which the screen accepted.
 
 `cargo test` runs the unit tests on Windows, and the code type-checks for `x86_64-unknown-linux-gnu`.
 
-Not tested yet: anything on Omarchy itself: `install.sh`, the Linux sensor readers and the Waybar tray icon.
+Not tested yet: `install.sh` end to end, and the Waybar tray icon.
 
 ## Known gaps
 
