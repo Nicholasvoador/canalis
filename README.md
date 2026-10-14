@@ -33,6 +33,7 @@ Settings can also be changed from a terminal:
 ```bash
 canalis preset 12        # built-in theme 1-14
 canalis brightness 70
+canalis split a.gif b.png  # one file on each half of the screen
 canalis fan fixed 60     # or: canalis fan smart
 canalis show             # print all settings
 ```

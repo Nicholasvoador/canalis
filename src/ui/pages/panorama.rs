@@ -4,7 +4,7 @@
 use super::PageContext;
 use crate::media::SUPPORTED_EXTENSIONS;
 use crate::settings::{
-    ALIGNMENTS, CELSIUS, CPU_BADGE, CUSTOMIZATION, DARK_TEXT, FAHRENHEIT, FILTERS, FIXED_MODE, FanCurvePreset, Filter, GPU_BADGE, LIGHT_TEXT,
+    ALIGNMENTS, CELSIUS, CPU_BADGE, CUSTOMIZATION, CustomTheme, DARK_TEXT, FAHRENHEIT, FILTERS, FIXED_MODE, FanCurvePreset, Filter, GPU_BADGE, LIGHT_TEXT,
     MAX_OVERLAY_FIELDS, OVERLAY_FIELDS, OverlayStyle, PLAY_MODES, PRESETS, SMART_MODE, Settings, badge_is_available,
 };
 use crate::ui::carousel::Carousel;
@@ -31,13 +31,17 @@ pub enum PanoramaTab {
 pub struct PanoramaPage {
     pub tab: PanoramaTab,
     carousel: Carousel,
+    /// Which half of the split screen is being edited: 0 left, 1 right.
+    half: usize,
 }
 
 impl PanoramaPage {
     pub fn new(tab: PanoramaTab, settings: &Settings) -> Self {
-        Self { tab, carousel: Carousel::new(settings.preset_index().unwrap_or(0)) }
+        Self { tab, carousel: Carousel::new(settings.preset_index().unwrap_or(0)), half: 0 }
     }
 }
+
+const HALF_NAMES: [&str; 2] = ["Left half", "Right half"];
 
 pub fn show(ui: &mut Ui, state: &mut PanoramaPage, page: &mut PageContext) {
     page_header(ui, "PANORAMA");
@@ -45,7 +49,7 @@ pub fn show(ui: &mut Ui, state: &mut PanoramaPage, page: &mut PageContext) {
     tabs(ui, &mut state.tab, &options);
     page_scroll(ui, |ui| match state.tab {
         PanoramaTab::Presets => preset_tab(ui, &mut state.carousel, page),
-        PanoramaTab::Customization => customization_tab(ui, page),
+        PanoramaTab::Customization => customization_tab(ui, &mut state.half, page),
         PanoramaTab::Screen => screen_settings(ui, &mut page.editor.settings),
         PanoramaTab::Fan => fan_settings(ui, page),
     });
@@ -63,16 +67,50 @@ fn preset_tab(ui: &mut Ui, carousel: &mut Carousel, page: &mut PageContext) {
     });
     ui.add_space(14.0);
     let settings = &mut page.editor.settings;
-    stats_card(ui, &mut settings.overlay, &mut settings.overlay_style);
+    stats_card(ui, "", &mut settings.overlay, &mut settings.overlay_style);
 }
 
-fn customization_tab(ui: &mut Ui, page: &mut PageContext) {
+fn customization_tab(ui: &mut Ui, half: &mut usize, page: &mut PageContext) {
     preview_card(ui, page);
     ui.add_space(14.0);
     media_library(ui, page);
     ui.add_space(14.0);
     let custom = &mut page.editor.settings.custom;
-    stats_card(ui, &mut custom.overlay, &mut custom.style);
+    if custom.is_split() {
+        half_card(ui, half, custom);
+        ui.add_space(14.0);
+        let shown = &mut custom.halves[*half];
+        stats_card(ui, HALF_NAMES[*half], &mut shown.overlay, &mut shown.style);
+    } else {
+        stats_card(ui, "", &mut custom.overlay, &mut custom.style);
+    }
+}
+
+/// Split screen: pick a half, then the file it shows; the stats card below edits the same half.
+fn half_card(ui: &mut Ui, half: &mut usize, custom: &mut CustomTheme) {
+    card(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(bold("Halves", 19.0));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let options: Vec<(usize, String)> = HALF_NAMES.iter().enumerate().rev().map(|(index, name)| (index, name.to_string())).collect();
+                segmented(ui, half, &options);
+            });
+        });
+        ui.label(muted("Each half shows one file. Square (1:1) media fills a half best: 1120×1080."));
+        ui.add_space(12.0);
+        let library = custom.media.clone();
+        style_row(ui, "Media", |ui| {
+            let shown = &mut custom.halves[*half].media;
+            if pill(ui, "None", shown.is_none()).clicked() {
+                *shown = None;
+            }
+            for name in library {
+                if pill(ui, &name, shown.as_deref() == Some(name.as_str())).clicked() {
+                    *shown = Some(name);
+                }
+            }
+        });
+    });
 }
 
 fn preview_card(ui: &mut Ui, page: &mut PageContext) {
@@ -98,10 +136,16 @@ fn media_library(ui: &mut Ui, page: &mut PageContext) {
             ui.label(bold("Your media", 19.0));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| add_media_button(ui, page));
         });
-        ui.label(muted("Images, GIFs and videos are copied to the screen over USB (adb). Use a 2:1 ratio; the panel is 2240×1080."));
-        ui.add_space(10.0);
+        ui.label(muted("Images, GIFs and videos are copied to the screen over USB (adb). The panel is 2240×1080 (2:1)."));
+        ui.add_space(12.0);
         let settings = &mut page.editor.settings;
-        media_list(ui, settings);
+        style_row(ui, "Layout", |ui| {
+            let mut split = settings.custom.is_split();
+            if segmented(ui, &mut split, &[(false, "Full screen".into()), (true, "Split screen".into())]) {
+                settings.custom.set_split(split);
+            }
+        });
+        media_list(ui, &mut settings.custom);
         if !settings.is_custom_theme() && !settings.custom.media.is_empty() {
             ui.add_space(10.0);
             if primary_button(ui, "Show my media on the screen").clicked() {
@@ -125,36 +169,55 @@ fn add_media_button(ui: &mut Ui, page: &mut PageContext) {
     }
 }
 
-fn media_list(ui: &mut Ui, settings: &mut Settings) {
-    if settings.custom.media.is_empty() {
+fn media_list(ui: &mut Ui, custom: &mut CustomTheme) {
+    if custom.media.is_empty() {
         ui.label(muted("No media yet. Add a file to show it on the screen."));
         return;
     }
     let mut remove = None;
-    for (index, name) in settings.custom.media.iter().enumerate() {
+    for (index, name) in custom.media.iter().enumerate() {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new(format!("{}.", index + 1)).color(MUTED));
             ui.label(name);
+            if let Some(where_shown) = custom.is_split().then(|| shown_on(custom, name)).flatten() {
+                ui.label(muted(format!("· {where_shown}")));
+            }
             if ui.small_button("Remove").clicked() {
-                remove = Some(index);
+                remove = Some(name.clone());
             }
         });
     }
-    if let Some(index) = remove {
-        settings.custom.media.remove(index);
+    if let Some(name) = remove {
+        custom.remove_media(&name);
     }
-    ui.add_space(10.0);
-    style_row(ui, "Play mode", |ui| {
-        let options: Vec<(String, String)> = PLAY_MODES.iter().map(|mode| (mode.to_string(), mode.to_string())).collect();
-        segmented(ui, &mut settings.custom.play_mode, &options);
-    });
+    if !custom.is_split() {
+        ui.add_space(10.0);
+        style_row(ui, "Play mode", |ui| {
+            let options: Vec<(String, String)> = PLAY_MODES.iter().map(|mode| (mode.to_string(), mode.to_string())).collect();
+            segmented(ui, &mut custom.play_mode, &options);
+        });
+    }
 }
 
-/// KANALI's "System Information Display": up to three stats and how they are drawn.
-fn stats_card(ui: &mut Ui, overlay: &mut Vec<String>, style: &mut OverlayStyle) {
+/// "left half", "right half" or "both halves": where a library file is shown in split screen.
+fn shown_on(custom: &CustomTheme, name: &str) -> Option<String> {
+    let halves: Vec<usize> = (0..HALF_NAMES.len()).filter(|&index| custom.halves[index].media.as_deref() == Some(name)).collect();
+    match halves[..] {
+        [] => None,
+        [index] => Some(HALF_NAMES[index].to_lowercase()),
+        _ => Some("both halves".into()),
+    }
+}
+
+/// KANALI's "System Information Display": up to three stats and how they are drawn; `area`
+/// names the half of a split screen being edited.
+fn stats_card(ui: &mut Ui, area: &str, overlay: &mut Vec<String>, style: &mut OverlayStyle) {
     card(ui, |ui| {
         ui.horizontal(|ui| {
             ui.label(bold("System Information Display", 19.0));
+            if !area.is_empty() {
+                ui.label(bold(format!("· {area}"), 19.0).color(LIME));
+            }
             ui.label(muted(format!("Select up to {MAX_OVERLAY_FIELDS} items")));
         });
         ui.add_space(14.0);

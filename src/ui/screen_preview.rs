@@ -7,9 +7,9 @@ use super::live_view::{LiveFrame, LiveView};
 use super::media_preview::{MediaFrame, MediaPreview};
 use super::preset_art::PresetArt;
 use super::theme::{self, BORDER, CARD_RAISED, LIME, MUTED, TEXT};
-use crate::settings::{CPU_BADGE, CUSTOMIZATION, FILTERS, OverlayStyle, Settings};
+use crate::settings::{CPU_BADGE, CUSTOMIZATION, FILTERS, Filter, OverlayStyle, PRESETS, Settings};
 use crate::status::LiveStatus;
-use eframe::egui::{self, Align2, Color32, FontId, Painter, Pos2, Rect, Sense, Stroke, StrokeKind, TextureHandle, Ui, Vec2, pos2, vec2};
+use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Painter, Pos2, Rect, Sense, Stroke, StrokeKind, TextureHandle, Ui, Vec2, pos2, vec2};
 use std::time::{Duration, Instant};
 
 const MAX_PREVIEW_WIDTH: f32 = 560.0;
@@ -18,11 +18,14 @@ const SCREEN_RADIUS: u8 = 10;
 const SCREEN_BLACK: Color32 = Color32::from_rgb(0x08, 0x09, 0x0A);
 /// A screenshot taken this soon after a theme change may still show the previous theme.
 const THEME_SETTLE_TIME: Duration = Duration::from_secs(4);
+/// Gap from the screen's edge to the stats and badges, as a share of its height.
+const EDGE_MARGIN: f32 = 0.074;
 
 /// Everything the preview draws from: media files, theme pictures and live screenshots.
 #[derive(Default)]
 pub struct PreviewSources {
-    pub media: MediaPreview,
+    /// The full-screen media, or the left and right halves in split screen.
+    pub media: [MediaPreview; 2],
     pub presets: PresetArt,
     pub live: LiveView,
     theme_shown_since: Option<(String, Instant)>,
@@ -55,11 +58,75 @@ pub fn screen_preview(ui: &mut Ui, settings: &Settings, status: &LiveStatus, sou
     sources.note_theme(&settings.theme);
     if sources.live.is_on() {
         paint_live(ui, &painter, screen, settings, sources);
-    } else {
-        paint_backdrop(ui, &painter, screen, settings, sources);
-        paint_filter(ui, &painter, screen, &settings.active_style().filter);
-        paint_overlay(&painter, screen, settings, status);
+        return;
     }
+    for (slot, pane) in panes(settings, screen).iter().enumerate() {
+        paint_backdrop(ui, &painter, pane, &mut sources.media[slot], &mut sources.presets);
+        paint_filter(ui, &painter, pane.area, &pane.overlay.style.filter);
+        paint_overlay(&painter, pane, status);
+    }
+}
+
+/// A picture with live stats over it: the whole screen, or one half of it in split screen.
+struct Pane<'a> {
+    area: Rect,
+    corners: CornerRadius,
+    backdrop: Backdrop<'a>,
+    overlay: Overlay<'a>,
+    /// Half of a split screen, which lays its stats out a little differently.
+    is_half: bool,
+}
+
+enum Backdrop<'a> {
+    Preset(usize),
+    Media(&'a str),
+    NoMedia,
+    EmptyHalf,
+}
+
+struct Overlay<'a> {
+    style: &'a OverlayStyle,
+    fields: &'a [String],
+    temperature_unit: &'a str,
+}
+
+fn panes<'a>(settings: &'a Settings, screen: Rect) -> Vec<Pane<'a>> {
+    let unit = settings.temperature_unit.as_str();
+    let whole = |backdrop, style, fields: &'a [String]| Pane {
+        area: screen,
+        corners: SCREEN_RADIUS.into(),
+        backdrop,
+        overlay: Overlay { style, fields, temperature_unit: unit },
+        is_half: false,
+    };
+    let custom = &settings.custom;
+    if let Some(index) = settings.preset_index() {
+        return vec![whole(Backdrop::Preset(index), &settings.overlay_style, &settings.overlay)];
+    }
+    if !custom.is_split() {
+        let backdrop = custom.media.first().map_or(Backdrop::NoMedia, |name| Backdrop::Media(name));
+        return vec![whole(backdrop, &custom.style, &custom.overlay)];
+    }
+    let halves = split_areas(screen);
+    custom
+        .halves
+        .iter()
+        .zip(halves)
+        .map(|(half, (area, corners))| Pane {
+            area,
+            corners,
+            backdrop: half.media.as_deref().map_or(Backdrop::EmptyHalf, Backdrop::Media),
+            overlay: Overlay { style: &half.style, fields: &half.overlay, temperature_unit: unit },
+            is_half: true,
+        })
+        .collect()
+}
+
+/// The left and right halves, rounded only on the screen's outer corners.
+fn split_areas(screen: Rect) -> [(Rect, CornerRadius); 2] {
+    let (left, right) = screen.split_left_right_at_fraction(0.5);
+    let radius = SCREEN_RADIUS;
+    [(left, CornerRadius { nw: radius, sw: radius, ne: 0, se: 0 }), (right, CornerRadius { nw: 0, sw: 0, ne: radius, se: radius })]
 }
 
 /// Draws the newest screenshot, and keeps it as the theme's carousel picture if it has none.
@@ -87,26 +154,29 @@ fn paint_live(ui: &Ui, painter: &Painter, screen: Rect, settings: &Settings, sou
     }
 }
 
-fn paint_backdrop(ui: &Ui, painter: &Painter, screen: Rect, settings: &Settings, sources: &mut PreviewSources) {
-    if let Some(index) = settings.preset_index() {
-        match sources.presets.texture(ui.ctx(), index) {
-            Some(texture) => paint_texture(ui, screen, texture),
-            None => paint_placeholder_art(painter, screen, &settings.theme),
-        }
-        return;
-    }
-    match settings.custom.media.first() {
-        Some(name) => match sources.media.frame(ui.ctx(), name) {
-            MediaFrame::Image(texture) => paint_texture(ui, screen, texture),
-            MediaFrame::Loading => caption(painter, screen, "Loading the screen's media…"),
-            MediaFrame::Unavailable(reason) => caption(painter, screen, reason),
+fn paint_backdrop(ui: &Ui, painter: &Painter, pane: &Pane, media: &mut MediaPreview, presets: &mut PresetArt) {
+    let area = pane.area;
+    match pane.backdrop {
+        Backdrop::Preset(index) => match presets.texture(ui.ctx(), index) {
+            Some(texture) => paint_rounded_texture(ui, area, texture, pane.corners),
+            None => paint_placeholder_art(painter, area, PRESETS[index]),
         },
-        None => paint_placeholder_art(painter, screen, "Customization (no media yet)"),
+        Backdrop::Media(name) => match media.frame(ui.ctx(), name) {
+            MediaFrame::Image(texture) => paint_rounded_texture(ui, area, texture, pane.corners),
+            MediaFrame::Loading => caption(painter, area, "Loading the screen's media…"),
+            MediaFrame::Unavailable(reason) => caption(painter, area, reason),
+        },
+        Backdrop::NoMedia => paint_placeholder_art(painter, area, "Customization (no media yet)"),
+        Backdrop::EmptyHalf => caption(painter, area, "No media on this half"),
     }
 }
 
 pub fn paint_texture(ui: &Ui, area: Rect, texture: &TextureHandle) {
-    egui::Image::from_texture(texture).uv(cover_uv(texture.size_vec2(), area.size())).corner_radius(SCREEN_RADIUS).paint_at(ui, area);
+    paint_rounded_texture(ui, area, texture, SCREEN_RADIUS.into());
+}
+
+fn paint_rounded_texture(ui: &Ui, area: Rect, texture: &TextureHandle, corners: CornerRadius) {
+    egui::Image::from_texture(texture).uv(cover_uv(texture.size_vec2(), area.size())).corner_radius(corners).paint_at(ui, area);
 }
 
 /// The part of an image that fills `area` without stretching, cropped evenly from both sides.
@@ -137,7 +207,7 @@ pub fn paint_placeholder_art(painter: &Painter, area: Rect, name: &str) {
 }
 
 /// Rain streaks or drifting smoke over the whole picture, like the screen's filters.
-fn paint_filter(ui: &Ui, painter: &Painter, screen: Rect, filter: &crate::settings::Filter) {
+fn paint_filter(ui: &Ui, painter: &Painter, screen: Rect, filter: &Filter) {
     let Some(kind) = filter.value.as_deref() else { return };
     let strength = filter.opacity as f32 / 100.0;
     let seconds = ui.input(|input| input.time) as f32;
@@ -172,39 +242,39 @@ struct Stat {
     label: String,
 }
 
-fn paint_overlay(painter: &Painter, screen: Rect, settings: &Settings, status: &LiveStatus) {
-    let style = settings.active_style();
-    let color = parse_hex_color(&style.color).unwrap_or(TEXT);
-    let height = screen.height();
+fn paint_overlay(painter: &Painter, pane: &Pane, status: &LiveStatus) {
+    let (area, overlay) = (pane.area, &pane.overlay);
+    let color = parse_hex_color(&overlay.style.color).unwrap_or(TEXT);
+    let height = area.height();
     let fonts = StatFonts {
         value: FontId::new(height * 0.165, theme::bold_family()),
         unit: FontId::proportional((height * 0.04).max(9.0)),
         label: FontId::proportional((height * 0.028).max(9.0)),
     };
     let row_height = height * 0.265;
-    let fields = screen_order(settings.active_overlay());
-    let top = screen.center().y - row_height * fields.len() as f32 / 2.0;
+    let fields = screen_order(overlay.fields, pane.is_half);
+    let top = area.center().y - row_height * fields.len() as f32 / 2.0;
     for (row, field) in fields.iter().enumerate() {
-        let (value, unit) = format::split_reading(&format::overlay_value(field, status, &settings.temperature_unit));
+        let (value, unit) = format::split_reading(&format::overlay_value(field, status, overlay.temperature_unit));
         let stat = Stat { value, unit, label: format::overlay_label(field) };
-        let left = aligned_left(screen, stat_width(painter, &stat, &fonts), &style.align);
+        let left = aligned_left(area, stat_width(painter, &stat, &fonts), &overlay.style.align);
         paint_stat(painter, pos2(left, top + row as f32 * row_height), &stat, &fonts, color);
     }
-    paint_badges(painter, screen, style, settings.active_overlay(), status);
+    paint_badges(painter, pane, status);
 }
 
-/// The screen draws the second stat at the top, then the first, then the rest
-/// (seen with [CPU, GPU] and with [CPU, GPU, Date & Time]).
-fn screen_order(fields: &[String]) -> Vec<&String> {
+/// Full screen draws the second stat at the top, then the first, then the rest (seen with
+/// [CPU, GPU] and with [CPU, GPU, Date & Time]); each half of a split screen keeps the chosen order.
+fn screen_order(fields: &[String], is_half: bool) -> Vec<&String> {
     let mut ordered: Vec<&String> = fields.iter().collect();
-    if ordered.len() >= 2 {
+    if ordered.len() >= 2 && !is_half {
         ordered.swap(0, 1);
     }
     ordered
 }
 
 fn aligned_left(screen: Rect, width: f32, align: &str) -> f32 {
-    let margin = screen.width() * 0.037;
+    let margin = screen.height() * EDGE_MARGIN;
     match align {
         "Center" => screen.center().x - width / 2.0,
         "Right" => screen.right() - margin - width,
@@ -224,14 +294,30 @@ fn paint_stat(painter: &Painter, left_top: Pos2, stat: &Stat, fonts: &StatFonts,
 }
 
 /// Name badges in the top-left corner, coloured by vendor (the screen shows AMD in red).
-fn paint_badges(painter: &Painter, screen: Rect, style: &OverlayStyle, overlay: &[String], status: &LiveStatus) {
-    let mut left_top = screen.left_top() + vec2(screen.width() * 0.034, screen.height() * 0.07);
-    for shown in style.shown_badges(overlay) {
-        let name = status.text(if shown == CPU_BADGE { "/spec/cpu" } else { "/spec/gpu" });
-        let name = if name.is_empty() { shown.replace(" Badge", "") } else { name };
-        let rect = badge(painter, left_top, &name, vendor_color(&name), (screen.height() * 0.027).max(9.0));
-        left_top.x = rect.right() + 8.0;
+/// A right-aligned half of a split screen puts its badges in the top-right corner instead.
+fn paint_badges(painter: &Painter, pane: &Pane, status: &LiveStatus) {
+    let (area, overlay) = (pane.area, &pane.overlay);
+    let font_size = (area.height() * 0.027).max(9.0);
+    let names: Vec<String> = overlay.style.shown_badges(overlay.fields).iter().map(|shown| badge_name(shown, status)).collect();
+    let from_right = pane.is_half && overlay.style.align == "Right";
+    let margin = area.height() * EDGE_MARGIN;
+    let mut x = if from_right { area.right() - margin - badges_width(painter, &names, font_size) } else { area.left() + margin };
+    for name in &names {
+        let rect = badge(painter, pos2(x, area.top() + area.height() * 0.07), name, vendor_color(name), font_size);
+        x = rect.right() + BADGE_GAP;
     }
+}
+
+const BADGE_GAP: f32 = 8.0;
+
+fn badge_name(shown: &str, status: &LiveStatus) -> String {
+    let name = status.text(if shown == CPU_BADGE { "/spec/cpu" } else { "/spec/gpu" });
+    if name.is_empty() { shown.replace(" Badge", "") } else { name }
+}
+
+fn badges_width(painter: &Painter, names: &[String], font_size: f32) -> f32 {
+    let widths = names.iter().map(|name| badge_size(painter, name, font_size).x + BADGE_GAP);
+    widths.sum::<f32>() - BADGE_GAP
 }
 
 fn vendor_color(name: &str) -> Color32 {
@@ -242,9 +328,13 @@ fn vendor_color(name: &str) -> Color32 {
     }
 }
 
+fn badge_size(painter: &Painter, text: &str, font_size: f32) -> Vec2 {
+    painter.layout_no_wrap(text.to_string(), FontId::proportional(font_size), Color32::WHITE).size() + vec2(font_size * 1.4, font_size * 0.7)
+}
+
 fn badge(painter: &Painter, left_top: Pos2, text: &str, fill: Color32, font_size: f32) -> Rect {
     let galley = painter.layout_no_wrap(text.to_string(), FontId::proportional(font_size), Color32::WHITE);
-    let rect = Rect::from_min_size(left_top, galley.size() + vec2(font_size * 1.4, font_size * 0.7));
+    let rect = Rect::from_min_size(left_top, badge_size(painter, text, font_size));
     painter.rect_filled(rect, 4, fill);
     painter.galley(rect.center() - galley.size() / 2.0, galley, Color32::WHITE);
     rect
@@ -286,9 +376,31 @@ mod tests {
     }
 
     #[test]
+    fn split_screen_has_a_pane_per_half() {
+        let mut settings = Settings::default();
+        settings.split_screen("left.gif".into(), "right.gif".into());
+        settings.custom.remove_media("right.gif");
+        let screen = Rect::from_min_size(pos2(0.0, 0.0), vec2(200.0, 100.0));
+        let panes = panes(&settings, screen);
+        assert_eq!(panes.iter().map(|pane| pane.area.width()).collect::<Vec<_>>(), [100.0, 100.0]);
+        assert!(matches!(panes[0].backdrop, Backdrop::Media("left.gif")));
+        assert!(matches!(panes[1].backdrop, Backdrop::EmptyHalf));
+    }
+
+    #[test]
+    fn full_screen_and_presets_have_one_pane() {
+        let screen = Rect::from_min_size(pos2(0.0, 0.0), vec2(200.0, 100.0));
+        let preset = Settings::default();
+        assert!(matches!(panes(&preset, screen)[..], [Pane { backdrop: Backdrop::Preset(0), .. }]));
+        let custom = Settings { theme: CUSTOMIZATION.into(), ..Settings::default() };
+        assert!(matches!(panes(&custom, screen)[..], [Pane { backdrop: Backdrop::NoMedia, .. }]));
+    }
+
+    #[test]
     fn stats_follow_the_screens_order() {
         let fields: Vec<String> = ["CPU Temperature", "GPU Temperature", "Date&Time"].map(String::from).to_vec();
-        assert_eq!(screen_order(&fields), ["GPU Temperature", "CPU Temperature", "Date&Time"]);
-        assert_eq!(screen_order(&fields[..1]), ["CPU Temperature"]);
+        assert_eq!(screen_order(&fields, false), ["GPU Temperature", "CPU Temperature", "Date&Time"]);
+        assert_eq!(screen_order(&fields[..1], false), ["CPU Temperature"]);
+        assert_eq!(screen_order(&fields, true), ["CPU Temperature", "GPU Temperature", "Date&Time"]);
     }
 }

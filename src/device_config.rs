@@ -5,7 +5,7 @@
 //! "turboPump": false, which the firmware rejects (it expects an object of
 //! unknown shape), so it is left out; the rest of the config still applies.
 
-use crate::settings::{CustomTheme, Fan, OverlayStyle, Settings};
+use crate::settings::{CustomTheme, FULL_SCREEN, Fan, OverlayStyle, PLAY_MODES, SPLIT_SCREEN, Settings};
 use serde_json::{Value, json};
 
 pub fn build_device_config(settings: &Settings, spec: &Value) -> Value {
@@ -32,9 +32,29 @@ fn theme(settings: &Settings) -> Value {
 }
 
 fn custom_theme(custom: &CustomTheme) -> Value {
+    if custom.is_split() { split_theme(custom) } else { full_screen_theme(custom) }
+}
+
+/// The screen's app (HomeUI) puts media[0] and media[1] on the two halves and reads "settings" and
+/// "sysinfoDisplay" as one entry per half; it plays each half's file on its own and has no ratio here.
+fn split_theme(custom: &CustomTheme) -> Value {
+    let media: Vec<&str> = custom.halves.iter().map(|half| half.media.as_deref().unwrap_or_default()).collect();
+    let settings: Vec<Value> = custom.halves.iter().map(|half| style(&half.style, &half.overlay)).collect();
+    let overlays: Vec<&Vec<String>> = custom.halves.iter().map(|half| &half.overlay).collect();
     json!({
         "id": crate::settings::CUSTOMIZATION,
-        "screenMode": "Full Screen",
+        "screenMode": SPLIT_SCREEN,
+        "playMode": PLAY_MODES[0],
+        "media": media,
+        "settings": settings,
+        "sysinfoDisplay": overlays,
+    })
+}
+
+fn full_screen_theme(custom: &CustomTheme) -> Value {
+    json!({
+        "id": crate::settings::CUSTOMIZATION,
+        "screenMode": FULL_SCREEN,
         "playMode": custom.play_mode,
         "ratio": custom.ratio,
         "media": custom.media,
@@ -100,6 +120,27 @@ mod tests {
         settings.overlay_style.badges = vec![GPU_BADGE.into()];
         settings.overlay = vec!["CPU Usage".into()];
         assert_eq!(build_device_config(&settings, &spec())["waterBlockScreen"]["id"]["settings"]["badges"], json!([]));
+    }
+
+    /// Laid out like the split-screen state KANALI 1.2.1 keeps, with the media the screen reads by position.
+    const SPLIT_ID: &str = r##"{"id":"Customization","screenMode":"Screen Splitting","playMode":"Single",
+        "media":["left.gif",""],
+        "settings":[{"color":"#000000","align":"Center","filter":{"value":"Smoke","opacity":50},"badges":["CPU Badge"]},
+                    {"color":"#dcdcdc","align":"Left","filter":{"value":null,"opacity":100},"badges":[]}],
+        "sysinfoDisplay":[["CPU Temperature"],["GPU Usage","Date&Time"]]}"##;
+
+    #[test]
+    fn split_screen_sends_one_entry_per_half() {
+        let mut settings = Settings::default();
+        settings.split_screen("left.gif".into(), "right.gif".into());
+        settings.custom.remove_media("right.gif");
+        let [left, right] = &mut settings.custom.halves;
+        left.overlay = vec!["CPU Temperature".into()];
+        left.style = OverlayStyle { color: "#000000".into(), align: "Center".into(), badges: vec![CPU_BADGE.into()], ..OverlayStyle::default() };
+        left.style.filter = crate::settings::Filter { value: Some("Smoke".into()), opacity: 50 };
+        right.overlay = vec!["GPU Usage".into(), DATE_AND_TIME.into()];
+        let expected: Value = serde_json::from_str(SPLIT_ID).unwrap();
+        assert_eq!(build_device_config(&settings, &spec())["waterBlockScreen"]["id"], expected);
     }
 
     #[test]

@@ -30,6 +30,9 @@ pub const ROTATIONS: [u16; 4] = [0, 90, 180, 270];
 pub const MIRRORED_ROTATION: u16 = 90;
 pub const NORMAL_ROTATION: u16 = 270;
 pub const PLAY_MODES: [&str; 3] = ["Single", "Shuffle", "Loop"];
+pub const FULL_SCREEN: &str = "Full Screen";
+/// Two square halves, each with its own media and stats (KANALI's "Screen Splitting").
+pub const SPLIT_SCREEN: &str = "Screen Splitting";
 pub const DARK_TEXT: &str = "#000000";
 pub const LIGHT_TEXT: &str = "#dcdcdc";
 pub const FILTERS: [&str; 2] = ["Rain", "Smoke"];
@@ -83,14 +86,27 @@ pub struct Settings {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct CustomTheme {
+    /// Every file copied to the screen; full screen plays them all, split screen picks one per half.
     pub media: Vec<String>,
     pub ratio: String,
     pub play_mode: String,
+    pub screen_mode: String,
     #[serde(flatten)]
     pub style: OverlayStyle,
     pub overlay: Vec<String>,
+    /// The left and right halves in split screen.
+    pub halves: [ScreenHalf; 2],
     #[serde(flatten)]
     pub unknown_fields: Map<String, Value>,
+}
+
+/// One half of the split screen: a file from the media library, and the stats drawn over it.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(default)]
+pub struct ScreenHalf {
+    pub media: Option<String>,
+    pub style: OverlayStyle,
+    pub overlay: Vec<String>,
 }
 
 /// How the live stats are drawn: text colour, alignment, a rain or smoke filter, and CPU/GPU name badges.
@@ -145,8 +161,10 @@ impl Default for CustomTheme {
             media: Vec::new(),
             ratio: "2:1".into(),
             play_mode: PLAY_MODES[0].into(),
+            screen_mode: FULL_SCREEN.into(),
             style: OverlayStyle::default(),
             overlay: Vec::new(),
+            halves: Default::default(),
             unknown_fields: Map::new(),
         }
     }
@@ -209,16 +227,8 @@ impl Settings {
         self.theme == CUSTOMIZATION
     }
 
-    pub fn active_overlay(&self) -> &Vec<String> {
-        if self.is_custom_theme() { &self.custom.overlay } else { &self.overlay }
-    }
-
     pub fn active_overlay_mut(&mut self) -> &mut Vec<String> {
         if self.is_custom_theme() { &mut self.custom.overlay } else { &mut self.overlay }
-    }
-
-    pub fn active_style(&self) -> &OverlayStyle {
-        if self.is_custom_theme() { &self.custom.style } else { &self.overlay_style }
     }
 
     /// Index into `PRESETS` of the theme on the screen, unless it shows your own media.
@@ -239,9 +249,20 @@ impl Settings {
             self.custom.media.clear();
         }
         self.custom.media.retain(|existing| !names.contains(existing));
+        if self.custom.is_split() {
+            self.custom.fill_empty_halves(&names);
+        }
         self.custom.media.extend(names);
         self.custom.play_mode = if self.custom.media.len() > 1 { "Loop" } else { "Single" }.into();
         self.theme = CUSTOMIZATION.into();
+    }
+
+    /// Shows `left` and `right` side by side, each on its own half of the screen.
+    pub fn split_screen(&mut self, left: String, right: String) {
+        self.add_custom_media(vec![left.clone(), right.clone()], true);
+        self.custom.screen_mode = SPLIT_SCREEN.into();
+        self.custom.halves[0].media = Some(left);
+        self.custom.halves[1].media = Some(right);
     }
 
     pub fn validate(&self) -> Result<(), String> {
@@ -251,11 +272,54 @@ impl Settings {
         require([CELSIUS, FAHRENHEIT].contains(&self.temperature_unit.as_str()), "unknown temperature unit")?;
         require([SMART_MODE, FIXED_MODE].contains(&self.fan.mode.as_str()), "unknown fan mode")?;
         require(self.fan.fixed_percent <= 100, "fixed fan speed must be between 0 and 100")?;
-        require(PLAY_MODES.contains(&self.custom.play_mode.as_str()), "play mode must be Single, Shuffle or Loop")?;
         self.overlay_style.validate()?;
-        self.custom.style.validate()?;
-        require(overlay_is_valid(&self.overlay) && overlay_is_valid(&self.custom.overlay), "overlay: up to 3 known fields")?;
+        require(overlay_is_valid(&self.overlay), "overlay: up to 3 known fields")?;
+        self.custom.validate()?;
         require(self.update_interval_seconds >= 0.2, "update interval must be at least 0.2 s")
+    }
+}
+
+impl CustomTheme {
+    pub fn is_split(&self) -> bool {
+        self.screen_mode == SPLIT_SCREEN
+    }
+
+    /// Switching to split screen puts the library's first unused files on any empty half.
+    pub fn set_split(&mut self, split: bool) {
+        self.screen_mode = if split { SPLIT_SCREEN } else { FULL_SCREEN }.into();
+        if split {
+            let library = self.media.clone();
+            self.fill_empty_halves(&library);
+        }
+    }
+
+    /// Takes a file out of the library, and off any half that shows it.
+    pub fn remove_media(&mut self, name: &str) {
+        self.media.retain(|existing| existing != name);
+        for half in self.halves.iter_mut().filter(|half| half.media.as_deref() == Some(name)) {
+            half.media = None;
+        }
+    }
+
+    fn fill_empty_halves(&mut self, names: &[String]) {
+        let shown: Vec<String> = self.halves.iter().filter_map(|half| half.media.clone()).collect();
+        let unused = names.iter().filter(|name| !shown.contains(name));
+        let empty_halves = self.halves.iter_mut().filter(|half| half.media.is_none());
+        for (half, name) in empty_halves.zip(unused) {
+            half.media = Some(name.clone());
+        }
+    }
+
+    fn validate(&self) -> Result<(), String> {
+        require(PLAY_MODES.contains(&self.play_mode.as_str()), "play mode must be Single, Shuffle or Loop")?;
+        require([FULL_SCREEN, SPLIT_SCREEN].contains(&self.screen_mode.as_str()), "screen mode must be Full Screen or Screen Splitting")?;
+        self.style.validate()?;
+        require(overlay_is_valid(&self.overlay), "overlay: up to 3 known fields")?;
+        for half in &self.halves {
+            half.style.validate()?;
+            require(overlay_is_valid(&half.overlay), "overlay: up to 3 known fields")?;
+        }
+        Ok(())
     }
 }
 
@@ -426,6 +490,53 @@ pub(crate) mod tests {
         assert_eq!((settings.rotate, settings.is_mirrored()), (MIRRORED_ROTATION, true));
         settings.set_mirrored(false);
         assert_eq!(settings.rotate, NORMAL_ROTATION);
+    }
+
+    #[test]
+    fn split_screen_puts_one_file_on_each_half() {
+        let mut settings = Settings::default();
+        settings.split_screen("left.gif".into(), "right.png".into());
+        assert!(settings.is_custom_theme() && settings.custom.is_split());
+        assert_eq!(settings.custom.media, ["left.gif", "right.png"]);
+        assert_eq!(settings.custom.halves.map(|half| half.media), [Some("left.gif".into()), Some("right.png".into())]);
+    }
+
+    #[test]
+    fn media_added_in_split_screen_fills_the_empty_halves() {
+        let mut settings = Settings::default();
+        settings.custom.screen_mode = SPLIT_SCREEN.into();
+        settings.custom.halves[0].media = Some("kept.gif".into());
+        settings.add_custom_media(vec!["new.gif".into(), "extra.gif".into()], true);
+        assert_eq!(settings.custom.halves.map(|half| half.media), [Some("kept.gif".into()), Some("new.gif".into())]);
+    }
+
+    #[test]
+    fn switching_to_split_screen_uses_files_not_already_shown() {
+        let mut custom = CustomTheme { media: vec!["a.gif".into(), "b.gif".into()], ..CustomTheme::default() };
+        custom.halves[0].media = Some("a.gif".into());
+        custom.set_split(true);
+        assert_eq!(custom.halves[1].media.as_deref(), Some("b.gif"));
+        custom.set_split(false);
+        assert_eq!((custom.screen_mode.as_str(), custom.halves[1].media.as_deref()), (FULL_SCREEN, Some("b.gif")));
+    }
+
+    #[test]
+    fn removing_media_clears_the_half_showing_it() {
+        let mut settings = Settings::default();
+        settings.split_screen("a.gif".into(), "b.gif".into());
+        settings.custom.remove_media("b.gif");
+        assert_eq!(settings.custom.media, ["a.gif"]);
+        assert_eq!(settings.custom.halves[1].media, None);
+    }
+
+    #[test]
+    fn rejects_unknown_screen_mode_and_bad_half_overlay() {
+        let mut settings = Settings::default();
+        settings.custom.screen_mode = "Picture in picture".into();
+        assert!(settings.validate().is_err());
+        settings.custom.screen_mode = SPLIT_SCREEN.into();
+        settings.custom.halves[1].overlay = vec!["Fan Speed".into()];
+        assert!(settings.validate().is_err());
     }
 
     #[test]

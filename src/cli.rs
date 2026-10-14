@@ -3,7 +3,7 @@
 use crate::media::AdbScreen;
 use crate::settings::{ALIGNMENTS, CELSIUS, CUSTOMIZATION, FAHRENHEIT, FIXED_MODE, PRESETS, SMART_MODE, Settings, SettingsStore};
 use clap::{Parser, Subcommand, ValueEnum};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "canalis", version, about = "Canalis: control the TRYX Panorama cooler screen (run without arguments for the window)")]
@@ -59,6 +59,8 @@ pub enum Command {
         #[arg(long)]
         append: bool,
     },
+    /// Split the screen in two: one image/GIF/video on each half (square media fits best)
+    Split { left: PathBuf, right: PathBuf },
     /// Live stats shown over the theme (up to 3), e.g. "CPU Temperature"
     Overlay { fields: Vec<String> },
     /// Fan on the pump head: smart curve, or fixed percent
@@ -89,13 +91,14 @@ pub fn run_settings_command(command: Command, store: &SettingsStore) -> Result<S
         Command::Show => Ok(format!("{}\n# file: {}", serde_json::to_string_pretty(&store.load()?).unwrap_or_default(), store.path().display())),
         Command::Presets => Ok(presets_listing()),
         Command::Custom { files, color, align, append } => add_custom_media(store, &files, color, align, append),
+        Command::Split { left, right } => split_screen(store, &left, &right),
         other => update(store, |settings| apply_change(other, settings)).map(|()| "saved".into()),
     }
 }
 
 fn presets_listing() -> String {
     let presets: Vec<String> = PRESETS.iter().enumerate().map(|(index, name)| format!("{}  {name}", index + 1)).collect();
-    presets.join("\n") + "\ncustom  your own media (canalis custom FILE)"
+    presets.join("\n") + "\ncustom  your own media (canalis custom FILE, or canalis split LEFT RIGHT)"
 }
 
 fn update(store: &SettingsStore, change: impl FnOnce(&mut Settings) -> Result<(), String>) -> Result<(), String> {
@@ -147,9 +150,21 @@ fn add_custom_media(store: &SettingsStore, files: &[PathBuf], color: Option<Stri
     let message = format!("copied {} to the screen", names.join(", "));
     update(store, |settings| {
         settings.add_custom_media(names, append);
+        settings.custom.set_split(false);
         let style = &mut settings.custom.style;
         style.color = color.unwrap_or(style.color.clone());
         style.align = align.unwrap_or(style.align.clone());
+        Ok(())
+    })?;
+    Ok(message)
+}
+
+fn split_screen(store: &SettingsStore, left: &Path, right: &Path) -> Result<String, String> {
+    let library = AdbScreen::new();
+    let (left, right) = (library.add(left)?, library.add(right)?);
+    let message = format!("{left} on the left half, {right} on the right");
+    update(store, |settings| {
+        settings.split_screen(left, right);
         Ok(())
     })?;
     Ok(message)
