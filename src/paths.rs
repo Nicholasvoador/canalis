@@ -35,6 +35,12 @@ pub fn preset_art_directory() -> PathBuf {
     settings_path().with_file_name("presets")
 }
 
+/// Local copies of the screen's theme videos, played on the carousel's card in the centre. Only
+/// the themes actually watched are kept, because all fourteen together run to a few hundred MB.
+pub fn theme_video_directory() -> PathBuf {
+    settings_path().with_file_name("theme-videos")
+}
+
 /// Where the Windows service writes its messages (Linux uses the systemd journal).
 #[cfg(windows)]
 pub fn log_path() -> PathBuf {

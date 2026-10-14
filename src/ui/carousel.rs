@@ -15,6 +15,8 @@ const HEIGHT_SCALE: [f32; 4] = [1.0, 0.86, 0.74, 0.6];
 const DARKENING: [f32; 4] = [0.0, 0.45, 0.65, 0.8];
 const SLIDE_SECONDS: f32 = 0.25;
 const ARROW_RADIUS: f32 = 22.0;
+/// How close to the centre a card must slide before it counts as the one in front.
+const CENTRE_CARD: f32 = 0.5;
 const COMPETITION: &str = "TRYX 3D Visual Competition 2024";
 /// Credits KANALI shows for the competition themes: (index into PRESETS, artist, award).
 const CREDITS: [(usize, &str, &str); 6] = [
@@ -106,8 +108,10 @@ fn interpolate(table: &[f32; 4], steps: f32) -> f32 {
 fn paint_card(ui: &Ui, rect: Rect, index: usize, steps: f32, art: &mut PresetArt, selected: bool) {
     let painter = ui.painter();
     painter.rect_filled(rect, 12, BLACK);
-    match art.texture(ui.ctx(), index) {
-        Some(texture) => paint_texture(ui, rect, texture),
+    // Only the card in the centre plays its theme's video, and the still stands in until it starts.
+    let playing = (steps < CENTRE_CARD).then(|| art.playing_frame(ui.ctx(), index).cloned()).flatten();
+    match playing.or_else(|| art.texture(ui.ctx(), index).cloned()) {
+        Some(texture) => paint_texture(ui, rect, &texture),
         None => paint_placeholder_art(painter, rect, ""),
     }
     painter.rect_filled(rect, 12, Color32::from_black_alpha((255.0 * interpolate(&DARKENING, steps)) as u8));
@@ -116,7 +120,7 @@ fn paint_card(ui: &Ui, rect: Rect, index: usize, steps: f32, art: &mut PresetArt
     if steps < 1.5 {
         paint_title(painter, rect, index, selected);
     }
-    if steps < 0.5 {
+    if steps < CENTRE_CARD {
         paint_credit(painter, rect, index);
     }
 }

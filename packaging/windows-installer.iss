@@ -1,7 +1,7 @@
 ; Inno Setup 6 script for Canalis's Windows installer, canalis-setup-v<version>.exe:
 ;   iscc /DAppVersion=0.4.0 /DSourceDir=<folder with canalis.exe and the scripts> /DIconFile=<canalis.ico> /DOutputDir=<folder> windows-installer.iss
 ; It installs for the current user without administrator rights, then runs install-windows.ps1
-; for the rest: adb, LibreHardwareMonitor, start at login, and turning off KANALI's autostart.
+; for the rest: adb, ffmpeg, LibreHardwareMonitor, start at login, and turning off KANALI's autostart.
 
 [Setup]
 AppId={{8F3B6C2E-5D4A-4C1B-9E7F-2A6D0C9B1E43}
@@ -31,7 +31,7 @@ Source: "{#SourceDir}\uninstall-windows.ps1"; DestDir: "{app}"; Flags: ignorever
 Source: "{#SourceDir}\packaging\*"; DestDir: "{app}\packaging"; Flags: ignoreversion
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-windows.ps1"""; StatusMsg: "Setting up adb, LibreHardwareMonitor and start at login…"; Flags: waituntilterminated
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-windows.ps1"""; StatusMsg: "Setting up adb, ffmpeg, LibreHardwareMonitor and start at login…"; Flags: waituntilterminated
 Filename: "{app}\canalis.exe"; Description: "Open Canalis"; Flags: postinstall nowait skipifsilent
 
 [UninstallRun]

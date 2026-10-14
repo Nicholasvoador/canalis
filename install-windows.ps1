@@ -158,9 +158,11 @@ function Initialize-LibreHardwareMonitor {
     }
 }
 
-# adb copies your own images and videos to the screen; LibreHardwareMonitor provides temperatures and fans.
+# adb copies your own images and videos to the screen and reads the screen's own theme videos back;
+# ffmpeg turns those into the carousel's pictures; LibreHardwareMonitor provides temperatures and fans.
 function Install-Companions {
     Install-WingetPackage 'Google.PlatformTools'
+    Install-WingetPackage 'Gyan.FFmpeg'
     Install-WingetPackage 'LibreHardwareMonitor.LibreHardwareMonitor'
     Initialize-LibreHardwareMonitor
 }

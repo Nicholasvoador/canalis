@@ -50,7 +50,7 @@ The install scripts build Canalis themselves when run from a copy of this reposi
 
 ## Privacy
 
-This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Canalis talks only to the cooler over USB and, on Windows, to LibreHardwareMonitor on `127.0.0.1`. The installers download adb and LibreHardwareMonitor from their publishers through winget (Windows) or pacman (Linux).
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Canalis talks only to the cooler over USB and, on Windows, to LibreHardwareMonitor on `127.0.0.1`. The installers download adb, ffmpeg and LibreHardwareMonitor from their publishers through winget (Windows) or pacman (Linux).
 
 ## Code signing policy
 

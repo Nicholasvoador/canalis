@@ -20,7 +20,7 @@ The screen is a small Android 11 device. It connects over USB as `18d1:2d03`, wh
 | Connection | Device | Used for |
 |---|---|---|
 | CDC serial | `/dev/ttyACM*` (`/dev/tryx-panorama`) on Linux, `COM*` on Windows | settings and live stats |
-| ADB | `adb` | copying media to `/sdcard/pcMedia/` |
+| ADB | `adb` | copying media to `/sdcard/pcMedia/`, and reading the theme videos in `/system/media/video/` |
 
 Each serial frame looks like this:
 
@@ -34,7 +34,7 @@ Each serial frame looks like this:
 
 The payload is a text message like an HTTP request: `POST config 1\r\nSeqNumber=2\r\nDate=…\r\nContentType=json\r\nContentLength=606\r\n\r\n{…}`. The screen answers each message with `1 200` and `AckNumber=SeqNumber+1`.
 
-Built-in themes: the PANORAMA has 14, and choosing one sends `{"id": "Pre-set 12: Cyber Bunker", "settings": {"color", "align", "filter": {"value": "Rain" or "Smoke" or null, "opacity"}, "badges": ["CPU Badge", "GPU Badge"]}, "sysinfoDisplay": [...]}` (captured from KANALI's log). The custom theme uses the same `settings` object. A badge is only sent while a stat for that processor is shown, as in KANALI. "Mirror Mode" is not a separate setting: it sets the rotation to 90° (on) or 270° (off). The carousel pictures come from an installed KANALI's `app.asar` (Canalis doesn't ship TRYX's artwork), or from live view screenshots (`adb exec-out screencap -p`).
+Built-in themes: the PANORAMA has 14, and choosing one sends `{"id": "Pre-set 12: Cyber Bunker", "settings": {"color", "align", "filter": {"value": "Rain" or "Smoke" or null, "opacity"}, "badges": ["CPU Badge", "GPU Badge"]}, "sysinfoDisplay": [...]}` (captured from KANALI's log). The custom theme uses the same `settings` object. A badge is only sent while a stat for that processor is shown, as in KANALI. "Mirror Mode" is not a separate setting: it sets the rotation to 90° (on) or 270° (off). The carousel pictures come from the screen itself: it keeps a video of each theme in `/system/media/video/`, named after the theme, and ffmpeg takes a still out of a copy of one (Canalis doesn't ship TRYX's artwork). Failing that they come from an installed KANALI's `app.asar`, or from live view screenshots (`adb exec-out screencap -p`). The card in the centre plays the theme's own video, decoded by ffmpeg a frame at a time; only the themes actually watched are kept locally, since all fourteen together run to a few hundred MB.
 
 Custom media is copied to `/sdcard/pcMedia/` over adb, and the screen stacks the live stats from the bottom up (the first one chosen is drawn lowest). KANALI previews media from its own copy (`%APPDATA%\kanali\panorama\media`, with a PNG thumbnail for videos), and crops each file to 2:1, or to 1:1 for its split-screen mode, before sending it. Canalis keeps its own copies the same way, and pulls a file back from the screen the first time it needs one for the preview.
 
@@ -58,9 +58,9 @@ KANALI reads its stats through the HWiNFO SDK: `lib\BYMonitor64.dll` is HWiNFO's
 ## Tested
 
 On the real screen (firmware V1.0.11):
-- **Windows:** installed with `install-windows.ps1` in place of KANALI; the installer sets up adb and LibreHardwareMonitor (with PawnIO) on its own; the service starts hidden with its tray icon, connects on COM3, applies settings and streams live CPU, memory, disk, network and GPU stats plus CPU, motherboard and NVMe temperatures, CPU power and fan speeds; start at login is registered; command-line output works.
+- **Windows:** installed with `install-windows.ps1` in place of KANALI; the installer sets up adb, ffmpeg and LibreHardwareMonitor (with PawnIO) on its own; the service starts hidden with its tray icon, connects on COM3, applies settings and streams live CPU, memory, disk, network and GPU stats plus CPU, motherboard and NVMe temperatures, CPU power and fan speeds; start at login is registered; command-line output works.
 - Brightness changes made from the command line reach the screen within a second, and invalid values are refused and not saved.
-- The preview pulls the GIF already on the screen over adb and plays it, with the stats in the same order and layout as the screen. Live view shows real screenshots of the screen, even with another (offline) adb device attached. The carousel imports all 14 theme pictures from KANALI 1.2.1. The built-in-theme message matches the one KANALI sent for Pre-set 12 with Rain, a CPU badge and Date & Time, which the screen accepted.
+- The preview pulls the GIF already on the screen over adb and plays it, with the stats in the same order and layout as the screen. Live view shows real screenshots of the screen, even with another (offline) adb device attached. The carousel takes all 14 theme pictures off the screen, and from KANALI 1.2.1 when one is installed; the card in the centre plays that theme's video. The built-in-theme message matches the one KANALI sent for Pre-set 12 with Rain, a CPU badge and Date & Time, which the screen accepted.
 
 `cargo test` runs the unit tests on Windows, and the code type-checks for `x86_64-unknown-linux-gnu`.
 
@@ -71,4 +71,4 @@ Not tested yet: anything on Omarchy itself: `install.sh`, the Linux sensor reade
 - **"turboPump" warning:** the firmware logs `config JSONException--No value for turboPump`. KANALI's own `false` value causes a similar error. Settings still apply.
 - **Stats that need special access:** CPU voltage and memory speed are sent as 0. On Linux, CPU power is sent as 0 unless RAPL is readable; on Windows, temperatures, fans and CPU power need LibreHardwareMonitor.
 - **Windows command line:** `canalis.exe` is a windowed program, so `cmd` doesn't wait for it and its exit code isn't reported. Output still appears.
-- **Not implemented:** firmware updates, the KANALI cloud connection, "turbo pump" mode, and these KANALI PANORAMA features: split screen (two 1:1 media side by side), cropping media to 2:1 or 1:1 before upload, screen recording to make new media, the Low/Mid/High/Full fan speed profiles (Canalis offers their curves as starting points instead), and playing theme videos on hover.
+- **Not implemented:** firmware updates, the KANALI cloud connection, "turbo pump" mode, and these KANALI PANORAMA features: split screen (two 1:1 media side by side), cropping media to 2:1 or 1:1 before upload, screen recording to make new media, the Low/Mid/High/Full fan speed profiles (Canalis offers their curves as starting points instead), and playing a theme's video full screen on hover (the carousel's centre card plays it in place instead).

@@ -17,6 +17,7 @@ mod pages;
 mod preset_art;
 mod screen_preview;
 mod theme;
+mod theme_player;
 mod widgets;
 
 use crate::settings::SettingsStore;

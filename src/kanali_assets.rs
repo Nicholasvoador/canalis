@@ -67,7 +67,7 @@ fn is_poster_for(file_name: &str, wanted: &str) -> bool {
     POSTER_EXTENSIONS.contains(&extension.to_lowercase().as_str()) && loose_name(name) == wanted
 }
 
-fn loose_name(name: &str) -> String {
+pub fn loose_name(name: &str) -> String {
     name.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase()).collect()
 }
 

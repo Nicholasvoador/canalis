@@ -15,6 +15,7 @@ mod service;
 mod service_control;
 mod settings;
 mod status;
+mod theme_video;
 mod tray;
 mod ui;
 #[cfg(windows)]

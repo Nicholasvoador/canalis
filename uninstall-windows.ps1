@@ -1,5 +1,5 @@
 # Removes Canalis for the current Windows user. Your settings in %APPDATA%\canalis are kept,
-# and so are LibreHardwareMonitor, PawnIO and adb (other apps may use them).
+# and so are LibreHardwareMonitor, PawnIO, adb and ffmpeg (other apps may use them).
 param(
     # Set by the setup exe's uninstaller, which runs from the program's folder and removes it itself.
     [switch]$FromUninstaller
@@ -25,5 +25,5 @@ if (Get-ScheduledTask -TaskName $HardwareMonitorTask -ErrorAction SilentlyContin
     }
 }
 Write-Host "Removed. Settings kept in $env:APPDATA\canalis\"
-Write-Host 'To remove the helpers too: winget uninstall LibreHardwareMonitor.LibreHardwareMonitor namazso.PawnIO Google.PlatformTools'
+Write-Host 'To remove the helpers too: winget uninstall LibreHardwareMonitor.LibreHardwareMonitor namazso.PawnIO Google.PlatformTools Gyan.FFmpeg'
 Write-Host 'To go back to KANALI, open it and turn on "Startup with Windows" in its settings.'
