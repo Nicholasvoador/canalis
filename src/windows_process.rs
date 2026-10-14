@@ -6,7 +6,7 @@ use std::fs::OpenOptions;
 use std::os::windows::io::{IntoRawHandle, RawHandle};
 use std::path::Path;
 use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError, INVALID_HANDLE_VALUE};
-use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole, GetStdHandle, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE, SetStdHandle};
+use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole, FreeConsole, GetStdHandle, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE, SetStdHandle};
 use windows_sys::Win32::System::Threading::CreateMutexW;
 
 const MAX_LOG_BYTES: u64 = 1024 * 1024;
@@ -23,6 +23,13 @@ pub fn attach_parent_console() {
     if let Ok(console) = OpenOptions::new().write(true).open("CONOUT$") {
         set_output_handles(console.into_raw_handle());
     }
+}
+
+/// Lets go of the console attached by `attach_parent_console`. Windows ends every process still
+/// attached to a console when its window closes, so the service must not keep the console of
+/// the terminal or installer that started it.
+pub fn detach_console() {
+    unsafe { FreeConsole() };
 }
 
 /// Sends stdout and stderr to `log_file`, starting it afresh once it grows past 1 MB.

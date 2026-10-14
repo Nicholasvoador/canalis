@@ -79,12 +79,14 @@ fn start_hardware_monitor_after_login() {
     }
 }
 
-/// Only one service may talk to the screen; with no console, its messages go to a log file.
+/// Only one service may talk to the screen. It runs detached from the terminal or installer that
+/// started it, which would otherwise end it when closed, so its messages go to a log file.
 #[cfg(windows)]
 fn prepare_windows_service() -> Result<(), String> {
     if !windows_process::claim_single_instance(r"Local\CanalisService") {
         return Err("the service is already running".into());
     }
+    windows_process::detach_console();
     let log_file = paths::log_path();
     windows_process::redirect_output_to(&log_file).map_err(|error| format!("cannot open log file {}: {error}", log_file.display()))
 }
