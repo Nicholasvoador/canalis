@@ -9,11 +9,26 @@ ICON="$HOME/.local/share/icons/hicolor/256x256/apps/canalis.png"
 CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 PREBUILT="$SOURCE_DIRECTORY/canalis"
 
+# Arch doesn't support partial upgrades. Installing from a repository that has moved on since the
+# last `pacman -Syu` brings in packages built against newer libraries than the ones on disk;
+# android-tools is the one that bites, because an adb linked to a protobuf that isn't installed
+# cannot start, and Canalis needs adb for the screen's media, screenshots and theme pictures.
+# Upgrading everything alongside the install keeps the system whole, and nothing runs at all when
+# there is nothing to do. ffmpeg is what reads the screen's theme videos for the carousel.
 install_packages() {
-  local packages=(android-tools lm_sensors)
+  local packages=(android-tools ffmpeg lm_sensors)
   [[ -x "$PREBUILT" ]] || packages+=(rust)
-  echo "==> Installing ${packages[*]} (sudo)"
-  sudo pacman -S --needed "${packages[@]}"
+  local missing=()
+  local package
+  for package in "${packages[@]}"; do
+    pacman -Qq "$package" &> /dev/null || missing+=("$package")
+  done
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    echo "==> ${packages[*]} are already installed"
+    return
+  fi
+  echo "==> Installing ${missing[*]}, with a full system upgrade so adb matches its libraries (sudo)"
+  sudo pacman -Syu --needed "${missing[@]}"
 }
 
 # Linux's kernel sensor drivers play LibreHardwareMonitor's role on Windows. CPU (k10temp,

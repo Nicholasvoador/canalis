@@ -7,12 +7,14 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 const DEVICE_MEDIA_DIRECTORY: &str = "/sdcard/pcMedia";
+/// Where the screen keeps the videos of its fourteen built-in themes, named after them.
+const THEME_VIDEO_DIRECTORY: &str = "/system/media/video";
 pub const SUPPORTED_EXTENSIONS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "webp", "mp4", "avi"];
 const MAX_LIBRARY_BYTES: u64 = 500 * 1024 * 1024;
 #[cfg(windows)]
 const ADB_INSTALL_HINT: &str = "install it with: winget install Google.PlatformTools";
 #[cfg(not(windows))]
-const ADB_INSTALL_HINT: &str = "install it with: sudo pacman -S android-tools";
+const ADB_INSTALL_HINT: &str = "install it with: sudo pacman -Syu android-tools";
 
 /// How the cooler's screen lists itself in `adb devices -l` (firmware V1.0.11).
 const COOLER_MODEL: &str = "model:cm01";
@@ -32,6 +34,17 @@ impl AdbScreen {
     /// A PNG of what the screen shows right now (2240×1080).
     pub fn screenshot_png(&self) -> Result<Vec<u8>, String> {
         self.run_binary(&["exec-out", "screencap", "-p"])
+    }
+
+    /// The file names of the built-in themes' videos on the screen.
+    pub fn theme_video_names(&self) -> Result<Vec<String>, String> {
+        let listing = self.run(&["shell", "ls", THEME_VIDEO_DIRECTORY])?;
+        Ok(listing.lines().map(str::trim).filter(|name| name.ends_with(".mp4")).map(str::to_owned).collect())
+    }
+
+    /// Copies a theme's video off the screen, whole: the larger ones keep their index at the end.
+    pub fn pull_theme_video(&self, file_name: &str, destination: &Path) -> Result<(), String> {
+        self.run(&["pull", &format!("{THEME_VIDEO_DIRECTORY}/{file_name}"), &destination.to_string_lossy()]).map(|_| ())
     }
 
     /// Copies a file to the screen and returns the name it has there.
