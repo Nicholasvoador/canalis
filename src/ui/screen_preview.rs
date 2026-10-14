@@ -117,8 +117,10 @@ fn cover_uv(image: Vec2, area: Vec2) -> Rect {
     Rect::from_center_size(pos2(0.5, 0.5), span)
 }
 
+/// Wrapped to the screen's width so a long error stays readable.
 fn caption(painter: &Painter, screen: Rect, text: &str) {
-    painter.text(screen.left_bottom() + vec2(12.0, -10.0), Align2::LEFT_BOTTOM, text, FontId::proportional(11.5), TEXT.gamma_multiply(0.75));
+    let galley = painter.layout(text.to_string(), FontId::proportional(11.5), TEXT.gamma_multiply(0.75), screen.width() - 24.0);
+    painter.galley(screen.left_bottom() + vec2(12.0, -10.0 - galley.size().y), galley, TEXT);
 }
 
 /// Shown until a picture of the theme is available (from KANALI or the live view).

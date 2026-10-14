@@ -15,6 +15,11 @@ const MAX_LIBRARY_BYTES: u64 = 500 * 1024 * 1024;
 const ADB_INSTALL_HINT: &str = "install it with: winget install Google.PlatformTools";
 #[cfg(not(windows))]
 const ADB_INSTALL_HINT: &str = "install it with: sudo pacman -Syu android-tools";
+/// On Arch, adb stops starting when a library it links (protobuf, usually) is upgraded without it.
+#[cfg(not(windows))]
+const ADB_BROKEN_HINT: &str = "adb itself is broken; update the system with: sudo pacman -Syu";
+#[cfg(windows)]
+const ADB_BROKEN_HINT: &str = "adb itself is broken; reinstall it with: winget install Google.PlatformTools";
 
 /// How the cooler's screen lists itself in `adb devices -l` (firmware V1.0.11).
 const COOLER_MODEL: &str = "model:cm01";
@@ -90,7 +95,7 @@ impl AdbScreen {
             return Ok(output.stdout);
         }
         let message = String::from_utf8_lossy(if output.stderr.is_empty() { &output.stdout } else { &output.stderr }).trim().to_string();
-        Err(format!("adb {} failed: {message}", arguments[0]))
+        Err(failure_message(arguments[0], &message))
     }
 
     /// With other Android devices attached, adb must be told which one is the cooler.
@@ -102,6 +107,14 @@ impl AdbScreen {
         let output = hidden_command(&self.adb).args(["devices", "-l"]).output().ok()?;
         Some(String::from_utf8_lossy(&output.stdout).into_owned())
     }
+}
+
+/// A missing shared library means adb never ran, so the fix is the install, not the screen.
+fn failure_message(subcommand: &str, message: &str) -> String {
+    if message.contains("error while loading shared libraries") {
+        return format!("{ADB_BROKEN_HINT} ({message})");
+    }
+    format!("adb {subcommand} failed: {message}")
 }
 
 /// The cooler's serial from `adb devices -l`, or the only online device when none looks like the cooler.
@@ -176,6 +189,13 @@ mod tests {
         let phone_and_cooler = "List of devices attached\nR58M  device model:SM_G991B\nCM01  device model:cm01\n";
         assert_eq!(cooler_serial(phone_and_cooler).as_deref(), Some("CM01"));
         assert_eq!(cooler_serial("List of devices attached\nA device model:x\nB device model:y\n"), None);
+    }
+
+    #[test]
+    fn a_broken_adb_says_how_to_fix_it() {
+        let missing_library = "adb: error while loading shared libraries: libprotobuf.so.36.1.0: cannot open shared object file";
+        assert!(failure_message("pull", missing_library).starts_with(ADB_BROKEN_HINT));
+        assert_eq!(failure_message("pull", "remote object does not exist"), "adb pull failed: remote object does not exist");
     }
 
     #[test]
