@@ -1,7 +1,7 @@
 //! The media shown on the screen, decoded for the window's preview. GIFs animate; videos have no preview.
 
 use super::images::{shrink, texture};
-use crate::media::AdbScreen;
+use crate::media::{AdbScreen, is_video};
 use eframe::egui::{Context, TextureHandle};
 use image::codecs::gif::GifDecoder;
 use image::{AnimationDecoder, RgbaImage};
@@ -12,7 +12,6 @@ use std::time::{Duration, Instant};
 
 const MAX_FRAMES: usize = 150;
 const MIN_FRAME_DELAY: Duration = Duration::from_millis(20);
-const VIDEO_EXTENSIONS: [&str; 2] = ["mp4", "avi"];
 
 pub enum MediaFrame<'a> {
     Image(&'a TextureHandle),
@@ -90,7 +89,7 @@ impl Animation {
 }
 
 fn load(ctx: &Context, name: &str) -> Result<Animation, String> {
-    if VIDEO_EXTENSIONS.iter().any(|extension| name.to_lowercase().ends_with(extension)) {
+    if is_video(Path::new(name)) {
         return Err(format!("Video: {name}"));
     }
     let local_file = AdbScreen::new().local_copy(name)?;

@@ -1,9 +1,9 @@
 //! Slow work (adb pushes, service control) runs on a worker thread so the window stays responsive.
 
+use crate::crop::MediaUpload;
 use crate::hardware_monitor;
 use crate::media::AdbScreen;
 use crate::service_control::{self, ServiceAction};
-use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, channel};
 
 pub enum JobOutcome {
@@ -23,10 +23,11 @@ impl Jobs {
         self.running.as_ref().map(|(label, _)| label.as_str())
     }
 
-    pub fn add_media(&mut self, files: Vec<PathBuf>, ctx: &eframe::egui::Context) {
-        self.spawn("Copying media to the screen…", ctx, move || {
-            let library = AdbScreen::new();
-            match files.iter().map(|file| library.add(file)).collect::<Result<Vec<_>, _>>() {
+    pub fn add_media(&mut self, uploads: Vec<MediaUpload>, ctx: &eframe::egui::Context) {
+        let label = if uploads.iter().any(|upload| upload.crop.is_some()) { "Cropping and copying media to the screen…" } else { "Copying media to the screen…" };
+        self.spawn(label, ctx, move || {
+            let screen = AdbScreen::new();
+            match uploads.iter().map(|upload| upload.copy_to_screen(&screen)).collect::<Result<Vec<_>, _>>() {
                 Ok(names) => JobOutcome::MediaAdded(names),
                 Err(error) => JobOutcome::Failed(error),
             }

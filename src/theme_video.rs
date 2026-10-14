@@ -98,10 +98,18 @@ fn poster(video: &Path) -> Option<RgbaImage> {
     Some(frame)
 }
 
-/// Seeking belongs before the input, where it costs one jump instead of decoding up to that point.
 fn decode_frame(video: &Path, seconds: &str) -> Option<RgbaImage> {
-    let encode = ["-frames:v", "1", "-vf", POSTER_FILTER, "-f", "image2pipe", "-c:v", "png"];
-    let output = hidden_command(ffmpeg_program()).args(["-v", "error", "-nostdin", "-ss", seconds]).arg("-i").arg(video).args(encode).arg("-").output().ok()?;
+    video_still(video, seconds, Some(POSTER_FILTER))
+}
+
+/// One frame of a video, decoded by ffmpeg and optionally filtered (scaled, say). Seeking belongs
+/// before the input, where it costs one jump instead of decoding up to that point.
+pub fn video_still(video: &Path, seconds: &str, filter: Option<&str>) -> Option<RgbaImage> {
+    let filter_arguments = filter.map(|filter| ["-vf", filter]);
+    let encode = ["-frames:v", "1", "-f", "image2pipe", "-c:v", "png"];
+    let mut command = hidden_command(ffmpeg_program());
+    command.args(["-v", "error", "-nostdin", "-ss", seconds]).arg("-i").arg(video).args(filter_arguments.iter().flatten()).args(encode).arg("-");
+    let output = command.output().ok()?;
     output.status.success().then_some(())?;
     image::load_from_memory(&output.stdout).ok().map(|image| image.to_rgba8())
 }

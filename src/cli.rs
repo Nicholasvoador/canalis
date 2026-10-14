@@ -1,9 +1,10 @@
 //! Command line: `canalis` opens the window; subcommands change settings or run the service.
 
+use crate::crop::{MediaUpload, Shape};
 use crate::media::AdbScreen;
 use crate::settings::{ALIGNMENTS, CELSIUS, CUSTOMIZATION, FAHRENHEIT, FIXED_MODE, PRESETS, SMART_MODE, Settings, SettingsStore};
 use clap::{Parser, Subcommand, ValueEnum};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "canalis", version, about = "Canalis: control the TRYX Panorama cooler screen (run without arguments for the window)")]
@@ -58,9 +59,18 @@ pub enum Command {
         /// Add to the current media instead of replacing it
         #[arg(long)]
         append: bool,
+        /// Crop each file evenly from both sides to the screen's shape (2240×1080)
+        #[arg(long)]
+        crop: bool,
     },
     /// Split the screen in two: one image/GIF/video on each half (square media fits best)
-    Split { left: PathBuf, right: PathBuf },
+    Split {
+        left: PathBuf,
+        right: PathBuf,
+        /// Crop both files evenly from both sides to a half's shape (1120×1080)
+        #[arg(long)]
+        crop: bool,
+    },
     /// Live stats shown over the theme (up to 3), e.g. "CPU Temperature"
     Overlay { fields: Vec<String> },
     /// Fan on the pump head: smart curve, or fixed percent
@@ -90,8 +100,14 @@ pub fn run_settings_command(command: Command, store: &SettingsStore) -> Result<S
     match command {
         Command::Show => Ok(format!("{}\n# file: {}", serde_json::to_string_pretty(&store.load()?).unwrap_or_default(), store.path().display())),
         Command::Presets => Ok(presets_listing()),
-        Command::Custom { files, color, align, append } => add_custom_media(store, &files, color, align, append),
-        Command::Split { left, right } => split_screen(store, &left, &right),
+        Command::Custom { files, color, align, append, crop } => {
+            let shape = crop.then_some(Shape::Wide);
+            add_custom_media(store, &uploads(files, shape)?, OverlayChoice { color, align }, append)
+        }
+        Command::Split { left, right, crop } => {
+            let shape = crop.then_some(Shape::Square);
+            split_screen(store, &upload(left, shape)?, &upload(right, shape)?)
+        }
         other => update(store, |settings| apply_change(other, settings)).map(|()| "saved".into()),
     }
 }
@@ -139,29 +155,47 @@ fn set_fan(settings: &mut Settings, mode: FanMode, percent: Option<u8>) {
     }
 }
 
-fn add_custom_media(store: &SettingsStore, files: &[PathBuf], color: Option<String>, align: Option<String>, append: bool) -> Result<String, String> {
-    if let Some(align) = &align {
-        if !ALIGNMENTS.contains(&align.as_str()) {
-            return Err("align must be Left, Center or Right".into());
-        }
+/// Text colour and alignment given with `canalis custom`.
+struct OverlayChoice {
+    color: Option<String>,
+    align: Option<String>,
+}
+
+fn uploads(files: Vec<PathBuf>, shape: Option<Shape>) -> Result<Vec<MediaUpload>, String> {
+    files.into_iter().map(|file| upload(file, shape)).collect()
+}
+
+/// The file as it is, or cropped evenly from both sides to `shape`.
+fn upload(file: PathBuf, shape: Option<Shape>) -> Result<MediaUpload, String> {
+    match shape {
+        Some(shape) => MediaUpload::centered(file, shape),
+        None => Ok(MediaUpload { file, crop: None }),
     }
-    let library = AdbScreen::new();
-    let names = files.iter().map(|file| library.add(file)).collect::<Result<Vec<_>, _>>()?;
+}
+
+fn add_custom_media(store: &SettingsStore, uploads: &[MediaUpload], overlay: OverlayChoice, append: bool) -> Result<String, String> {
+    if let Some(align) = &overlay.align
+        && !ALIGNMENTS.contains(&align.as_str())
+    {
+        return Err("align must be Left, Center or Right".into());
+    }
+    let screen = AdbScreen::new();
+    let names = uploads.iter().map(|upload| upload.copy_to_screen(&screen)).collect::<Result<Vec<_>, _>>()?;
     let message = format!("copied {} to the screen", names.join(", "));
     update(store, |settings| {
         settings.add_custom_media(names, append);
         settings.custom.set_split(false);
         let style = &mut settings.custom.style;
-        style.color = color.unwrap_or(style.color.clone());
-        style.align = align.unwrap_or(style.align.clone());
+        style.color = overlay.color.unwrap_or(style.color.clone());
+        style.align = overlay.align.unwrap_or(style.align.clone());
         Ok(())
     })?;
     Ok(message)
 }
 
-fn split_screen(store: &SettingsStore, left: &Path, right: &Path) -> Result<String, String> {
-    let library = AdbScreen::new();
-    let (left, right) = (library.add(left)?, library.add(right)?);
+fn split_screen(store: &SettingsStore, left: &MediaUpload, right: &MediaUpload) -> Result<String, String> {
+    let screen = AdbScreen::new();
+    let (left, right) = (left.copy_to_screen(&screen)?, right.copy_to_screen(&screen)?);
     let message = format!("{left} on the left half, {right} on the right");
     update(store, |settings| {
         settings.split_screen(left, right);

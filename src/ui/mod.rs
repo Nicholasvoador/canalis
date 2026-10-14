@@ -3,6 +3,7 @@
 mod app;
 mod carousel;
 mod charts;
+mod crop_dialog;
 mod editor;
 mod fan_curve;
 mod fonts;

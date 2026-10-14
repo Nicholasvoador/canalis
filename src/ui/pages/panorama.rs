@@ -7,7 +7,9 @@ use crate::settings::{
     ALIGNMENTS, CELSIUS, CPU_BADGE, CUSTOMIZATION, CustomTheme, DARK_TEXT, FAHRENHEIT, FILTERS, FIXED_MODE, FanCurvePreset, Filter, GPU_BADGE, LIGHT_TEXT,
     MAX_OVERLAY_FIELDS, OVERLAY_FIELDS, OverlayStyle, PLAY_MODES, PRESETS, SMART_MODE, Settings, badge_is_available,
 };
+use crate::crop::Shape;
 use crate::ui::carousel::Carousel;
+use crate::ui::crop_dialog::CropDialog;
 use crate::ui::fan_curve::fan_curve_editor;
 use crate::ui::format::field_title;
 use crate::ui::screen_preview::{parse_hex_color, screen_preview};
@@ -33,11 +35,12 @@ pub struct PanoramaPage {
     carousel: Carousel,
     /// Which half of the split screen is being edited: 0 left, 1 right.
     half: usize,
+    cropper: CropDialog,
 }
 
 impl PanoramaPage {
     pub fn new(tab: PanoramaTab, settings: &Settings) -> Self {
-        Self { tab, carousel: Carousel::new(settings.preset_index().unwrap_or(0)), half: 0 }
+        Self { tab, carousel: Carousel::new(settings.preset_index().unwrap_or(0)), half: 0, cropper: CropDialog::default() }
     }
 }
 
@@ -49,10 +52,13 @@ pub fn show(ui: &mut Ui, state: &mut PanoramaPage, page: &mut PageContext) {
     tabs(ui, &mut state.tab, &options);
     page_scroll(ui, |ui| match state.tab {
         PanoramaTab::Presets => preset_tab(ui, &mut state.carousel, page),
-        PanoramaTab::Customization => customization_tab(ui, &mut state.half, page),
+        PanoramaTab::Customization => customization_tab(ui, state, page),
         PanoramaTab::Screen => screen_settings(ui, &mut page.editor.settings),
         PanoramaTab::Fan => fan_settings(ui, page),
     });
+    if let Some(uploads) = state.cropper.show(ui.ctx()) {
+        page.jobs.add_media(uploads, ui.ctx());
+    }
 }
 
 fn preset_tab(ui: &mut Ui, carousel: &mut Carousel, page: &mut PageContext) {
@@ -70,17 +76,18 @@ fn preset_tab(ui: &mut Ui, carousel: &mut Carousel, page: &mut PageContext) {
     stats_card(ui, "", &mut settings.overlay, &mut settings.overlay_style);
 }
 
-fn customization_tab(ui: &mut Ui, half: &mut usize, page: &mut PageContext) {
+fn customization_tab(ui: &mut Ui, state: &mut PanoramaPage, page: &mut PageContext) {
     preview_card(ui, page);
     ui.add_space(14.0);
-    media_library(ui, page);
+    media_library(ui, &mut state.cropper, page);
     ui.add_space(14.0);
     let custom = &mut page.editor.settings.custom;
+    let half = state.half;
     if custom.is_split() {
-        half_card(ui, half, custom);
+        half_card(ui, &mut state.half, custom);
         ui.add_space(14.0);
-        let shown = &mut custom.halves[*half];
-        stats_card(ui, HALF_NAMES[*half], &mut shown.overlay, &mut shown.style);
+        let shown = &mut custom.halves[half];
+        stats_card(ui, HALF_NAMES[half], &mut shown.overlay, &mut shown.style);
     } else {
         stats_card(ui, "", &mut custom.overlay, &mut custom.style);
     }
@@ -130,11 +137,11 @@ fn preview_card(ui: &mut Ui, page: &mut PageContext) {
     });
 }
 
-fn media_library(ui: &mut Ui, page: &mut PageContext) {
+fn media_library(ui: &mut Ui, cropper: &mut CropDialog, page: &mut PageContext) {
     card(ui, |ui| {
         ui.horizontal(|ui| {
             ui.label(bold("Your media", 19.0));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| add_media_button(ui, page));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| add_media_button(ui, cropper, page));
         });
         ui.label(muted("Images, GIFs and videos are copied to the screen over USB (adb). The panel is 2240×1080 (2:1)."));
         ui.add_space(12.0);
@@ -155,7 +162,8 @@ fn media_library(ui: &mut Ui, page: &mut PageContext) {
     });
 }
 
-fn add_media_button(ui: &mut Ui, page: &mut PageContext) {
+/// Picked files go through the crop window first, in the shape they will be shown in.
+fn add_media_button(ui: &mut Ui, cropper: &mut CropDialog, page: &mut PageContext) {
     if let Some(label) = page.jobs.busy_label() {
         ui.spinner();
         ui.label(muted(label));
@@ -164,7 +172,8 @@ fn add_media_button(ui: &mut Ui, page: &mut PageContext) {
     if primary_button(ui, "Add media…").clicked() {
         let picked = rfd::FileDialog::new().add_filter("Images and videos", &SUPPORTED_EXTENSIONS).pick_files();
         if let Some(files) = picked.filter(|files| !files.is_empty()) {
-            page.jobs.add_media(files, ui.ctx());
+            let shape = if page.editor.settings.custom.is_split() { Shape::Square } else { Shape::Wide };
+            cropper.open(files, shape);
         }
     }
 }

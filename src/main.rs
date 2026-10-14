@@ -3,6 +3,7 @@
 mod app_icon;
 mod cli;
 mod device_config;
+mod crop;
 mod hardware_monitor;
 mod hidden_command;
 mod kanali_assets;

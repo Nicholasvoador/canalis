@@ -10,6 +10,7 @@ const DEVICE_MEDIA_DIRECTORY: &str = "/sdcard/pcMedia";
 /// Where the screen keeps the videos of its fourteen built-in themes, named after them.
 const THEME_VIDEO_DIRECTORY: &str = "/system/media/video";
 pub const SUPPORTED_EXTENSIONS: [&str; 7] = ["png", "jpg", "jpeg", "gif", "webp", "mp4", "avi"];
+const VIDEO_EXTENSIONS: [&str; 2] = ["mp4", "avi"];
 const MAX_LIBRARY_BYTES: u64 = 500 * 1024 * 1024;
 #[cfg(windows)]
 const ADB_INSTALL_HINT: &str = "install it with: winget install Google.PlatformTools";
@@ -154,6 +155,10 @@ pub fn device_file_name(local_file: &Path) -> String {
     let stem = stem.trim_matches(|c| c == '.' || c == '_');
     let stem = if stem.is_empty() { "media" } else { stem };
     format!("{stem}.{}", extension(local_file))
+}
+
+pub fn is_video(path: &Path) -> bool {
+    VIDEO_EXTENSIONS.contains(&extension(path).as_str())
 }
 
 fn extension(path: &Path) -> String {
