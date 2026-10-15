@@ -52,7 +52,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
-      - run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev
+      # The last line is what GPUI needs: X11 and Wayland input, fonts and Vulkan.
+      - run: |
+          sudo apt-get update && sudo apt-get install -y pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev \
+            libxkbcommon-x11-dev libxcb1-dev libx11-xcb-dev libfontconfig1-dev libfreetype6-dev libvulkan-dev
       - run: rustup update stable --no-self-update && rustup default stable
       - run: cargo test --release --locked
       - run: cargo build --release --locked

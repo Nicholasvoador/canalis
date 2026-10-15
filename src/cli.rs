@@ -30,6 +30,13 @@ pub enum Command {
     /// Write the app icon as a PNG (used by install.sh)
     #[command(hide = true)]
     Icon { path: std::path::PathBuf },
+    /// Open the window drawn with GPUI, while the move from egui is under way
+    #[command(hide = true)]
+    Gui {
+        /// Page to open on
+        #[arg(long, value_enum, default_value = "home")]
+        page: crate::ui::StartPage,
+    },
     /// Print the current settings
     Show,
     /// List the built-in themes
