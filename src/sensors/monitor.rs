@@ -107,7 +107,7 @@ impl SystemMonitor {
         json!({
             "total": total,
             "used": used,
-            "load": if total > 0 { (100 * used + total / 2) / total } else { 0 },
+            "load": (100 * used + total / 2).checked_div(total).unwrap_or(0),
             "activity": 0,
             "temperature": self.hwmon.disk_temperature(),
             "readSpeed": (rates[0] / MEGABYTE).round() as u64,

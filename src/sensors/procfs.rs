@@ -45,7 +45,7 @@ pub fn read_memory(root: &Path) -> Memory {
     let total = fields.get("MemTotal").copied().unwrap_or(0) / 1024;
     let available = fields.get("MemAvailable").or(fields.get("MemFree")).copied().unwrap_or(0) / 1024;
     let used = total.saturating_sub(available);
-    let load = if total > 0 { (100 * used + total / 2) / total } else { 0 };
+    let load = (100 * used + total / 2).checked_div(total).unwrap_or(0);
     Memory { total_megabytes: total, used_megabytes: used, load_percent: load }
 }
 

@@ -1,114 +1,163 @@
 //! Interactive fan curve: drag points to set fan % for each CPU temperature.
 
-use super::theme::{BORDER, LIME, MUTED, TEXT};
+use super::geometry::{Area, from_pixels};
+use super::paint::{Anchor, Label, circle, line, polygon, polyline, ring, text};
+use super::pointer::follow_drag;
+use super::theme::{BLACK, BORDER, LIME, MUTED, TEXT, faded};
 use crate::settings::FanCurve;
-use eframe::egui::{self, Align2, FontId, Pos2, Rect, Sense, Stroke, Ui, pos2, vec2};
+use gpui_kit::*;
+use std::cell::Cell;
+use std::rc::Rc;
 
+const MAX_WIDTH: f32 = 760.0;
+const HEIGHT: f32 = 300.0;
 const POINT_RADIUS: f32 = 6.0;
 const GRAB_SIZE: f32 = 20.0;
 
-/// Returns true while a point is being dragged (so saving can wait for release).
-pub fn fan_curve_editor(ui: &mut Ui, curve: &mut FanCurve, current_temperature: Option<f32>) -> bool {
-    let size = vec2(ui.available_width().min(760.0), 300.0);
-    let (response, painter) = ui.allocate_painter(size, Sense::hover());
-    let plot = Rect::from_min_max(response.rect.min + vec2(44.0, 12.0), response.rect.max - vec2(16.0, 32.0));
-    draw_grid(&painter, plot);
-    if let Some(temperature) = current_temperature {
-        draw_current_temperature(&painter, plot, temperature);
+#[derive(Default)]
+pub struct FanCurveEditor {
+    /// The point being dragged.
+    pub dragging: Option<usize>,
+    /// Where the plot was last drawn, for working out which point a press grabbed.
+    plot: Rc<Cell<Area>>,
+}
+
+/// What happens while a point is dragged: `moved` gets the pointer's position, `released` the end.
+pub struct DragHandlers<Moved, Released> {
+    pub moved: Moved,
+    pub released: Released,
+}
+
+impl FanCurveEditor {
+    pub fn element<Moved, Released>(&self, width: f32, curve: &FanCurve, current_temperature: Option<f32>, handlers: DragHandlers<Moved, Released>) -> impl IntoElement + use<Moved, Released>
+    where
+        Moved: Fn(Point<f32>, &mut Window, &mut App) + 'static,
+        Released: Fn(&mut Window, &mut App) + 'static,
+    {
+        let (curve, plot_cell, dragging) = (curve.clone(), self.plot.clone(), self.dragging);
+        canvas(
+            move |bounds, _, _| plot_cell.set(plot_area(Area::from_bounds(bounds))),
+            move |bounds, (), window, cx| {
+                let plot = plot_area(Area::from_bounds(bounds));
+                draw_grid(window, cx, plot);
+                if let Some(temperature) = current_temperature {
+                    draw_current_temperature(window, cx, plot, temperature);
+                }
+                draw_curve(window, plot, &curve);
+                let pointer = from_pixels(window.mouse_position());
+                if let Some(index) = dragging.or_else(|| grabbed_point(plot, &curve, pointer)) {
+                    show_point_label(window, cx, plot, curve[index]);
+                }
+                if dragging.is_some() {
+                    follow_drag(window, handlers.moved, handlers.released);
+                }
+            },
+        )
+        .w(px(width.min(MAX_WIDTH)))
+        .h(px(HEIGHT))
     }
-    let dragging = drag_points(ui, response.id, plot, curve);
-    draw_curve(&painter, plot, curve);
-    dragging
+
+    /// Starts dragging the point under `pointer`, if there is one.
+    pub fn press(&mut self, curve: &FanCurve, pointer: Point<f32>) -> bool {
+        self.dragging = grabbed_point(self.plot.get(), curve, pointer);
+        self.dragging.is_some()
+    }
+
+    pub fn drag(&self, curve: &mut FanCurve, pointer: Point<f32>) {
+        if let Some(index) = self.dragging {
+            move_point(curve, index, self.plot.get(), pointer);
+        }
+    }
 }
 
-fn to_screen(plot: Rect, [temperature, percent]: [u8; 2]) -> Pos2 {
-    pos2(plot.left() + plot.width() * temperature as f32 / 100.0, plot.bottom() - plot.height() * percent as f32 / 100.0)
+fn plot_area(bounds: Area) -> Area {
+    Area::from_corners(point(bounds.left + 44.0, bounds.top + 12.0), point(bounds.right() - 16.0, bounds.bottom() - 32.0))
 }
 
-fn draw_grid(painter: &egui::Painter, plot: Rect) {
-    let label_font = FontId::proportional(12.0);
+fn to_screen(plot: Area, [temperature, percent]: [u8; 2]) -> Point<f32> {
+    point(plot.left + plot.width * temperature as f32 / 100.0, plot.bottom() - plot.height * percent as f32 / 100.0)
+}
+
+fn grabbed_point(plot: Area, curve: &FanCurve, pointer: Point<f32>) -> Option<usize> {
+    (0..curve.len()).find(|&index| Area::centred(to_screen(plot, curve[index]), GRAB_SIZE, GRAB_SIZE).contains(pointer))
+}
+
+fn draw_grid(window: &mut Window, cx: &mut App, plot: Area) {
     for step in (0..=100).step_by(20) {
         let fraction = step as f32 / 100.0;
-        let x = plot.left() + plot.width() * fraction;
-        let y = plot.bottom() - plot.height() * fraction;
-        painter.line_segment([pos2(x, plot.top()), pos2(x, plot.bottom())], Stroke::new(1.0, BORDER));
-        painter.line_segment([pos2(plot.left(), y), pos2(plot.right(), y)], Stroke::new(1.0, BORDER));
-        painter.text(pos2(x, plot.bottom() + 8.0), Align2::CENTER_TOP, format!("{step}°C"), label_font.clone(), MUTED);
-        painter.text(pos2(plot.left() - 8.0, y), Align2::RIGHT_CENTER, format!("{step}%"), label_font.clone(), MUTED);
+        let x = plot.left + plot.width * fraction;
+        let y = plot.bottom() - plot.height * fraction;
+        line(window, point(x, plot.top), point(x, plot.bottom()), 1.0, rgb(BORDER));
+        line(window, point(plot.left, y), point(plot.right(), y), 1.0, rgb(BORDER));
+        text(window, cx, point(x, plot.bottom() + 8.0), Anchor::CentreTop, &Label::new(&format!("{step}°C"), 12.0, rgb(MUTED)));
+        text(window, cx, point(plot.left - 8.0, y), Anchor::RightCentre, &Label::new(&format!("{step}%"), 12.0, rgb(MUTED)));
     }
 }
 
-fn draw_current_temperature(painter: &egui::Painter, plot: Rect, temperature: f32) {
-    let x = plot.left() + plot.width() * temperature.clamp(0.0, 100.0) / 100.0;
-    painter.line_segment([pos2(x, plot.top()), pos2(x, plot.bottom())], Stroke::new(1.5, TEXT.gamma_multiply(0.5)));
-    painter.text(pos2(x + 6.0, plot.top() + 4.0), Align2::LEFT_TOP, format!("CPU {temperature:.0}°C"), FontId::proportional(12.0), TEXT);
+fn draw_current_temperature(window: &mut Window, cx: &mut App, plot: Area, temperature: f32) {
+    let x = plot.left + plot.width * temperature.clamp(0.0, 100.0) / 100.0;
+    line(window, point(x, plot.top), point(x, plot.bottom()), 1.5, faded(TEXT, 0.5));
+    text(window, cx, point(x + 6.0, plot.top + 4.0), Anchor::LeftTop, &Label::new(&format!("CPU {temperature:.0}°C"), 12.0, rgb(TEXT)));
 }
 
-fn draw_curve(painter: &egui::Painter, plot: Rect, curve: &FanCurve) {
-    let points: Vec<Pos2> = curve.iter().map(|point| to_screen(plot, *point)).collect();
+fn draw_curve(window: &mut Window, plot: Area, curve: &FanCurve) {
+    let points: Vec<Point<f32>> = curve.iter().map(|spot| to_screen(plot, *spot)).collect();
     for segment in points.windows(2) {
-        let quad = vec![segment[0], segment[1], pos2(segment[1].x, plot.bottom()), pos2(segment[0].x, plot.bottom())];
-        painter.add(egui::Shape::convex_polygon(quad, LIME.gamma_multiply(0.08), Stroke::NONE));
+        polygon(window, &[segment[0], segment[1], point(segment[1].x, plot.bottom()), point(segment[0].x, plot.bottom())], faded(LIME, 0.08));
     }
-    painter.line(points.clone(), Stroke::new(2.5, LIME));
-    for point in points {
-        painter.circle(point, POINT_RADIUS, super::theme::BLACK, Stroke::new(2.5, LIME));
+    polyline(window, &points, 2.5, rgb(LIME));
+    for spot in points {
+        circle(window, spot, POINT_RADIUS, rgb(BLACK));
+        ring(window, spot, POINT_RADIUS + 1.25, 2.5, rgb(LIME));
     }
 }
 
-fn drag_points(ui: &mut Ui, id: egui::Id, plot: Rect, curve: &mut FanCurve) -> bool {
-    let mut dragging = false;
-    for index in 0..curve.len() {
-        let center = to_screen(plot, curve[index]);
-        let handle = ui.interact(Rect::from_center_size(center, vec2(GRAB_SIZE, GRAB_SIZE)), id.with(index), Sense::drag());
-        if handle.hovered() || handle.dragged() {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
-            show_point_label(ui, center, curve[index]);
-        }
-        if let (true, Some(pointer)) = (handle.dragged(), handle.interact_pointer_pos()) {
-            move_point(curve, index, plot, pointer);
-            dragging = true;
-        }
-    }
-    dragging
+fn show_point_label(window: &mut Window, cx: &mut App, plot: Area, [temperature, percent]: [u8; 2]) {
+    let spot = to_screen(plot, [temperature, percent]);
+    text(window, cx, point(spot.x, spot.y - 16.0), Anchor::CentreBottom, &Label::new(&format!("{temperature}°C → {percent}%"), 13.0, rgb(TEXT)));
 }
 
 /// First and last points keep their temperature; others stay between their neighbours.
-fn move_point(curve: &mut FanCurve, index: usize, plot: Rect, pointer: Pos2) {
-    let percent = ((plot.bottom() - pointer.y) / plot.height() * 100.0).round().clamp(0.0, 100.0) as u8;
+fn move_point(curve: &mut FanCurve, index: usize, plot: Area, pointer: Point<f32>) {
+    let percent = ((plot.bottom() - pointer.y) / plot.height * 100.0).round().clamp(0.0, 100.0) as u8;
     curve[index][1] = percent;
     let is_end = index == 0 || index + 1 == curve.len();
     if !is_end {
         let lowest = curve[index - 1][0] + 1;
         let highest = curve[index + 1][0].saturating_sub(1).max(lowest);
-        let temperature = ((pointer.x - plot.left()) / plot.width() * 100.0).round().clamp(0.0, 100.0) as u8;
+        let temperature = ((pointer.x - plot.left) / plot.width * 100.0).round().clamp(0.0, 100.0) as u8;
         curve[index][0] = temperature.clamp(lowest, highest);
     }
-}
-
-fn show_point_label(ui: &Ui, center: Pos2, [temperature, percent]: [u8; 2]) {
-    ui.painter().text(center + vec2(0.0, -16.0), Align2::CENTER_BOTTOM, format!("{temperature}°C → {percent}%"), FontId::proportional(13.0), TEXT);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    // GPUI's own `test` attribute comes in with `gpui_kit::*`; these are plain tests.
+    use core::prelude::v1::test;
 
-    fn plot() -> Rect {
-        Rect::from_min_size(pos2(0.0, 0.0), vec2(100.0, 100.0))
+    fn plot() -> Area {
+        Area::new(0.0, 0.0, 100.0, 100.0)
     }
 
     #[test]
     fn middle_points_stay_between_neighbours() {
         let mut curve: FanCurve = vec![[0, 10], [30, 30], [50, 40], [100, 100]];
-        move_point(&mut curve, 1, plot(), pos2(80.0, 25.0));
+        move_point(&mut curve, 1, plot(), point(80.0, 25.0));
         assert_eq!(curve[1], [49, 75]);
     }
 
     #[test]
     fn end_points_keep_their_temperature() {
         let mut curve: FanCurve = vec![[0, 10], [50, 40], [100, 100]];
-        move_point(&mut curve, 2, plot(), pos2(40.0, 60.0));
+        move_point(&mut curve, 2, plot(), point(40.0, 60.0));
         assert_eq!(curve[2], [100, 40]);
+    }
+
+    #[test]
+    fn a_press_grabs_the_point_under_the_pointer() {
+        let curve: FanCurve = vec![[0, 10], [50, 40], [100, 100]];
+        assert_eq!(grabbed_point(plot(), &curve, point(52.0, 58.0)), Some(1));
+        assert_eq!(grabbed_point(plot(), &curve, point(30.0, 30.0)), None);
     }
 }

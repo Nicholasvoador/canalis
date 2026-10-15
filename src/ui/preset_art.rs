@@ -2,64 +2,64 @@
 //! the screen's own theme videos, or from an installed KANALI, or failing both from the live view
 //! while that theme is on the screen. The card in the centre plays its theme's video over the top.
 
-use super::images::{decode_shrunk, shrink, texture};
+use super::images::{ImageBin, still};
 use super::theme_player::ThemePlayer;
 use crate::kanali_assets::KanaliArchive;
 use crate::paths;
 use crate::settings::{PRESETS, preset_name};
 use crate::theme_video::ThemeVideos;
-use eframe::egui::{Context, TextureHandle};
+use crate::ui::images::{decode_shrunk, shrink};
+use gpui_kit::RenderImage;
 use image::RgbaImage;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, channel};
 
-#[derive(Default)]
 pub struct PresetArt {
-    textures: Vec<Option<TextureHandle>>,
-    pending: Option<Receiver<(usize, TextureHandle)>>,
-    started: bool,
+    pictures: Vec<Option<Arc<RenderImage>>>,
+    pending: Option<Receiver<(usize, Arc<RenderImage>)>>,
     player: ThemePlayer,
 }
 
 impl PresetArt {
-    pub fn texture(&mut self, ctx: &Context, index: usize) -> Option<&TextureHandle> {
-        self.start_loading(ctx);
-        while let Some((loaded, handle)) = self.pending.as_ref().and_then(|receiver| receiver.try_recv().ok()) {
-            self.textures[loaded] = Some(handle);
+    pub fn new(bin: ImageBin) -> Self {
+        Self { pictures: vec![None; PRESETS.len()], pending: None, player: ThemePlayer::new(bin) }
+    }
+
+    pub fn picture(&mut self, index: usize) -> Option<Arc<RenderImage>> {
+        self.start_loading();
+        while let Some((loaded, picture)) = self.pending.as_ref().and_then(|receiver| receiver.try_recv().ok()) {
+            self.pictures[loaded] = Some(picture);
         }
-        self.textures.get(index)?.as_ref()
+        self.pictures.get(index)?.clone()
     }
 
     /// The frame of `index`'s theme video to draw now; the still stands in until one arrives.
-    pub fn playing_frame(&mut self, ctx: &Context, index: usize) -> Option<&TextureHandle> {
-        self.player.frame(ctx, index, preset_name(PRESETS.get(index)?))
+    pub fn playing_frame(&mut self, index: usize) -> Option<Arc<RenderImage>> {
+        self.player.frame(index, preset_name(PRESETS.get(index)?))
     }
 
     /// Keeps a capture of the screen as the picture of a theme that doesn't have one yet.
-    pub fn offer_capture(&mut self, ctx: &Context, index: usize, capture: &RgbaImage) {
-        if !self.textures.get(index).is_some_and(Option::is_none) {
+    pub fn offer_capture(&mut self, index: usize, capture: &RgbaImage) {
+        if !self.pictures.get(index).is_some_and(Option::is_none) {
             return;
         }
         save(index, capture);
-        self.textures[index] = Some(texture(ctx, &format!("preset-{index}"), capture));
+        self.pictures[index] = Some(still(capture.clone()));
     }
 
-    fn start_loading(&mut self, ctx: &Context) {
-        if self.started {
+    fn start_loading(&mut self) {
+        if self.pending.is_some() {
             return;
         }
-        self.started = true;
-        self.textures = vec![None; PRESETS.len()];
         let (sender, receiver) = channel();
-        let ctx = ctx.clone();
         std::thread::spawn(move || {
             let mut sources = LateSources::default();
             for index in 0..PRESETS.len() {
                 let Some(image) = load_cached(index).or_else(|| import(&mut sources, index)) else { continue };
-                if sender.send((index, texture(&ctx, &format!("preset-{index}"), &image))).is_err() {
+                if sender.send((index, still(image))).is_err() {
                     return;
                 }
-                ctx.request_repaint();
             }
         });
         self.pending = Some(receiver);

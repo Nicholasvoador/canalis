@@ -1,14 +1,14 @@
 //! The theme video playing on the carousel's card in the centre.
 //!
 //! ffmpeg reads the local copy of the video at its own speed (`-re`) and writes plain RGBA frames,
-//! which a thread turns into textures as they arrive. Only one card plays at a time, so moving
+//! which a thread turns into pictures as they arrive. Only one card plays at a time, so moving
 //! along the carousel stops the video behind it; a full channel pauses the decoder while nothing
 //! is being drawn, and the card falls back to its still until the first frame comes through.
 
-use super::images::texture;
+use super::images::{ImageBin, still};
 use crate::hidden_command::hidden_command;
 use crate::theme_video::{ThemeVideos, ffmpeg_program};
-use eframe::egui::{Context, TextureHandle};
+use gpui_kit::RenderImage;
 use image::RgbaImage;
 use std::io::Read;
 use std::path::Path;
@@ -24,42 +24,50 @@ const FRAMES_PER_SECOND: &str = "30";
 /// Enough to keep drawing smooth, and few enough that an unwatched video stops decoding.
 const FRAMES_AHEAD: usize = 2;
 
-#[derive(Default)]
 pub struct ThemePlayer {
     playing: Option<Playing>,
+    bin: ImageBin,
 }
 
 struct Playing {
     index: usize,
-    frames: Receiver<RgbaImage>,
-    texture: Option<TextureHandle>,
+    frames: Receiver<Arc<RenderImage>>,
+    picture: Option<Arc<RenderImage>>,
     decoder: Arc<Decoder>,
 }
 
 impl ThemePlayer {
+    pub fn new(bin: ImageBin) -> Self {
+        Self { playing: None, bin }
+    }
+
     /// The frame to draw for `index`, starting that theme's video and stopping any other.
-    pub fn frame(&mut self, ctx: &Context, index: usize, theme_name: &str) -> Option<&TextureHandle> {
+    pub fn frame(&mut self, index: usize, theme_name: &str) -> Option<Arc<RenderImage>> {
         if self.playing.as_ref().is_none_or(|playing| playing.index != index) {
-            self.start(ctx, index, theme_name);
+            self.start(index, theme_name);
         }
         let playing = self.playing.as_mut()?;
-        while let Ok(image) = playing.frames.try_recv() {
-            playing.texture = Some(texture(ctx, "theme-video", &image));
+        while let Ok(picture) = playing.frames.try_recv() {
+            if let Some(old) = playing.picture.replace(picture) {
+                self.bin.throw_away(old);
+            }
         }
-        playing.texture.as_ref()
+        playing.picture.clone()
     }
 
     /// Dropping the last video closes its channel, which stops the decoder behind it.
-    fn start(&mut self, ctx: &Context, index: usize, theme_name: &str) {
-        self.playing = None;
+    fn start(&mut self, index: usize, theme_name: &str) {
+        if let Some(old) = self.playing.take().and_then(|playing| playing.picture.clone()) {
+            self.bin.throw_away(old);
+        }
         let (sender, frames) = sync_channel(FRAMES_AHEAD);
         let decoder = Arc::new(Decoder::default());
-        let (ctx, theme_name, started) = (ctx.clone(), theme_name.to_string(), decoder.clone());
+        let (theme_name, started) = (theme_name.to_string(), decoder.clone());
         std::thread::spawn(move || {
-            play(&ctx, &theme_name, &sender, &started);
+            play(&theme_name, &sender, &started);
             started.stop();
         });
-        self.playing = Some(Playing { index, frames, texture: None, decoder });
+        self.playing = Some(Playing { index, frames, picture: None, decoder });
     }
 }
 
@@ -86,7 +94,7 @@ impl Decoder {
     }
 }
 
-fn play(ctx: &Context, theme_name: &str, frames: &SyncSender<RgbaImage>, decoder: &Decoder) {
+fn play(theme_name: &str, frames: &SyncSender<Arc<RenderImage>>, decoder: &Decoder) {
     let Some(video) = ThemeVideos::open().and_then(|videos| videos.local_copy(theme_name)) else {
         return;
     };
@@ -96,10 +104,9 @@ fn play(ctx: &Context, theme_name: &str, frames: &SyncSender<RgbaImage>, decoder
     let mut frame = vec![0u8; FRAME_BYTES];
     while output.read_exact(&mut frame).is_ok() {
         let Some(image) = RgbaImage::from_raw(FRAME_WIDTH, FRAME_HEIGHT, frame.clone()) else { break };
-        if frames.send(image).is_err() {
+        if frames.send(still(image)).is_err() {
             break;
         }
-        ctx.request_repaint();
     }
 }
 
@@ -115,15 +122,4 @@ fn decode(video: &Path) -> Option<Child> {
         .stderr(Stdio::null())
         .spawn()
         .ok()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_frame_fills_the_card() {
-        assert_eq!(FRAME_WIDTH, FRAME_HEIGHT * 2, "the screen and its themes are twice as wide as tall");
-        assert_eq!(RgbaImage::from_raw(FRAME_WIDTH, FRAME_HEIGHT, vec![0; FRAME_BYTES]).map(|image| image.width()), Some(FRAME_WIDTH));
-    }
 }

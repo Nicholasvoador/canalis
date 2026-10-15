@@ -55,7 +55,7 @@ KANALI reads its stats through the HWiNFO SDK: `lib\BYMonitor64.dll` is HWiNFO's
 | `service.rs` | the background loop |
 | `service_control/` | start/stop and start at login (systemd, or the Windows Run key) |
 | `tray/` | the service's tray icon (Windows notification area, or StatusNotifierItem on Linux) |
-| `ui/` | the window |
+| `ui/` | the window, drawn with GPUI through GPUI Kit |
 
 ## Tested
 

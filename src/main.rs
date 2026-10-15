@@ -4,7 +4,6 @@ mod app_icon;
 mod cli;
 mod device_config;
 mod crop;
-mod gui;
 mod hardware_monitor;
 mod hidden_command;
 mod kanali_assets;
@@ -42,19 +41,13 @@ fn main() -> ExitCode {
         Command::Ui { page } => run_window(store, page),
         Command::Service { port } => run_service(store, port),
         Command::Icon { path } => print_outcome(app_icon::save_png(&path).map(|()| format!("wrote {}", path.display()))),
-        Command::Gui { page } => {
-            gui::run(store, paths::status_path(), page);
-            ExitCode::SUCCESS
-        }
         settings_command => print_outcome(cli::run_settings_command(settings_command, &store)),
     }
 }
 
 fn run_window(store: SettingsStore, page: ui::StartPage) -> ExitCode {
-    match ui::run(store, paths::status_path(), page) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => print_outcome(Err(format!("cannot open window: {error}"))),
-    }
+    ui::run(store, paths::status_path(), page);
+    ExitCode::SUCCESS
 }
 
 fn run_service(store: SettingsStore, port: Option<String>) -> ExitCode {

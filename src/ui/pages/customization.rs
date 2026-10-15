@@ -2,15 +2,15 @@
 //! a split screen) and the crop window that new files pass through.
 
 use crate::crop::Shape;
-use crate::gui::crop_dialog::{CANVAS_WIDTH, CropView, Decision};
-use crate::gui::geometry::from_pixels;
-use crate::gui::jobs::Job;
-use crate::gui::pointer::follow_drag;
-use crate::gui::screen_preview::{MAX_PREVIEW_WIDTH, screen_preview};
-use crate::gui::shell::CanalisWindow;
-use crate::gui::crop_dialog::CropCanvas;
-use crate::gui::theme::{BLACK, BORDER, CARD, faded};
-use crate::gui::widgets::{bold, busy_note, card, card_inner_width, muted, pill, primary_button, secondary_button, segmented, style_row};
+use crate::ui::crop_dialog::{CANVAS_WIDTH, CropView, Decision};
+use crate::ui::geometry::from_pixels;
+use crate::ui::jobs::Job;
+use crate::ui::pointer::follow_drag;
+use crate::ui::screen_preview::{MAX_PREVIEW_WIDTH, screen_preview};
+use crate::ui::shell::CanalisWindow;
+use crate::ui::crop_dialog::CropCanvas;
+use crate::ui::theme::{BLACK, BORDER, CARD, faded};
+use crate::ui::widgets::{bold, busy_note, card, card_inner_width, muted, pill, primary_button, secondary_button, segmented, style_row};
 use crate::media::SUPPORTED_EXTENSIONS;
 use crate::settings::{CUSTOMIZATION, CustomTheme, PLAY_MODES};
 use gpui_kit::component::Sizable;

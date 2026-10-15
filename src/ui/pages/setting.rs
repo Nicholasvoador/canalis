@@ -1,10 +1,14 @@
 //! SETTING: background service, start at login, update rate, files and about.
 
-use super::PageContext;
+use super::page_scroll;
+use crate::ui::jobs::Job;
+use crate::ui::shell::CanalisWindow;
+use crate::ui::theme::{DANGER, LIME, MUTED, OK};
+use crate::ui::widgets::{CARD_GAP, bold, busy_note, card, info_line, muted, page_header, primary_button, secondary_button, setting_row, status_dot};
 use crate::service_control::{self, ServiceAction};
-use crate::ui::theme::{DANGER, LIME, OK};
-use crate::ui::widgets::{bold, card, info_line, muted, page_header, page_scroll, primary_button, secondary_button, setting_row, status_dot, toggle};
-use eframe::egui::{self, RichText, Ui};
+use gpui_kit::component::ActiveTheme;
+use gpui_kit::component::switch::Switch;
+use gpui_kit::*;
 use std::path::{Path, PathBuf};
 
 #[cfg(windows)]
@@ -31,113 +35,104 @@ impl SettingPage {
     }
 }
 
-pub fn show(ui: &mut Ui, state: &mut SettingPage, page: &mut PageContext) {
-    page_header(ui, "SETTING");
-    page_scroll(ui, |ui| {
-        service_card(ui, state, page);
-        ui.add_space(14.0);
-        #[cfg(windows)]
-        {
-            sensors_card(ui, page);
-            ui.add_space(14.0);
+impl CanalisWindow {
+    pub fn setting_page(&mut self, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let cards = div()
+            .flex()
+            .flex_col()
+            .gap(px(14.0))
+            .child(self.service_card(cx))
+            .children(self.sensors_card())
+            .child(self.files_card(window, cx))
+            .child(about_card());
+        div().flex().flex_col().size_full().child(page_header("SETTING")).child(page_scroll("setting-scroll", cards)).into_any_element()
+    }
+
+    fn service_card(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        card()
+            .child(bold("Background service", 19.0))
+            .child(muted("Keeps the screen configured and sends it live stats, even when this window is closed."))
+            .child(div().pt_2().child(self.service_status()))
+            .child(div().flex().items_center().gap_3().py_2().child(self.service_buttons(cx)))
+            .child(self.login_start_row(cx))
+            .child(muted(LOGS_HINT))
+    }
+
+    fn service_status(&self) -> impl IntoElement {
+        if self.connected() {
+            status_dot(OK, "Running and connected to the screen")
+        } else if self.service_running() {
+            status_dot(LIME, "Running, waiting for the screen")
+        } else {
+            status_dot(DANGER, "Not running")
         }
-        card(ui, |ui| {
-            setting_row(ui, "Update interval", "How often live stats are sent to the screen.", |ui| {
-                ui.add(egui::Slider::new(&mut page.editor.settings.update_interval_seconds, 0.5..=5.0).suffix(" s").step_by(0.5));
-            });
-            file_location(ui, "Settings file", page.editor.path());
-            file_location(ui, "Live status file", &state.status_path);
-        });
-        ui.add_space(14.0);
-        about_card(ui);
-    });
-}
-
-fn file_location(ui: &mut Ui, title: &str, path: &Path) {
-    ui.label(muted(title));
-    ui.add(egui::Label::new(RichText::new(path.display().to_string()).monospace().size(12.5)).wrap());
-    ui.add_space(4.0);
-}
-
-fn service_card(ui: &mut Ui, state: &mut SettingPage, page: &mut PageContext) {
-    card(ui, |ui| {
-        ui.label(bold("Background service", 19.0));
-        ui.label(muted("Keeps the screen configured and sends it live stats, even when this window is closed."));
-        ui.add_space(12.0);
-        service_status(ui, page);
-        ui.add_space(12.0);
-        ui.horizontal(|ui| service_buttons(ui, page));
-        ui.add_space(12.0);
-        login_start_row(ui, state, page);
-        ui.label(muted(LOGS_HINT));
-    });
-}
-
-fn service_status(ui: &mut Ui, page: &PageContext) {
-    if page.connected() {
-        status_dot(ui, OK, "Running and connected to the screen");
-    } else if page.service_running() {
-        status_dot(ui, LIME, "Running, waiting for the screen");
-    } else {
-        status_dot(ui, DANGER, "Not running");
     }
-}
 
-fn service_buttons(ui: &mut Ui, page: &mut PageContext) {
-    if let Some(label) = page.jobs.busy_label() {
-        ui.spinner();
-        ui.label(muted(label));
-        return;
-    }
-    let ctx = ui.ctx().clone();
-    if !page.service_running() && primary_button(ui, "Start").clicked() {
-        page.jobs.service_command(ServiceAction::Start, &ctx);
-    }
-    if page.service_running() && secondary_button(ui, "Restart").clicked() {
-        page.jobs.service_command(ServiceAction::Restart, &ctx);
-    }
-    if page.service_running() && secondary_button(ui, "Stop").clicked() {
-        page.jobs.service_command(ServiceAction::Stop, &ctx);
-    }
-}
-
-fn login_start_row(ui: &mut Ui, state: &mut SettingPage, page: &mut PageContext) {
-    let Some(enabled) = state.login_start.as_mut() else {
-        ui.label(muted("Start at login is unavailable: run the installer first."));
-        return;
-    };
-    setting_row(ui, "Start at login", "Run the service automatically when you log in, like KANALI's \"Startup with Windows\".", |ui| {
-        if toggle(ui, enabled) {
-            page.jobs.set_login_start(*enabled, ui.ctx());
+    fn service_buttons(&self, cx: &mut Context<Self>) -> AnyElement {
+        if let Some(label) = self.busy_label() {
+            return busy_note(label).into_any_element();
         }
-    });
-}
-
-/// Windows only lets kernel drivers read temperatures and fans; LibreHardwareMonitor provides them.
-#[cfg(windows)]
-fn sensors_card(ui: &mut Ui, page: &PageContext) {
-    card(ui, |ui| {
-        ui.label(bold("Temperatures and fans", 19.0));
-        ui.add_space(8.0);
-        if page.status.number("/snapshot/cpu/temperature") > 0.0 {
-            status_dot(ui, OK, "Reading them from LibreHardwareMonitor");
-            return;
+        let command = |action: ServiceAction| cx.listener(move |this: &mut Self, _: &ClickEvent, _, cx| this.start_job(Job::service_command(action), cx));
+        if !self.service_running() {
+            return primary_button("service-start", "Start").on_click(command(ServiceAction::Start)).into_any_element();
         }
-        status_dot(ui, LIME, "Not available: LibreHardwareMonitor is not running");
-        ui.label(muted(
+        div()
+            .flex()
+            .gap_3()
+            .child(secondary_button("service-restart", "Restart").on_click(command(ServiceAction::Restart)))
+            .child(secondary_button("service-stop", "Stop").on_click(command(ServiceAction::Stop)))
+            .into_any_element()
+    }
+
+    fn login_start_row(&self, cx: &mut Context<Self>) -> AnyElement {
+        let Some(enabled) = self.setting_page.login_start else {
+            return muted("Start at login is unavailable: run the installer first.").into_any_element();
+        };
+        let switch = Switch::new("login-start").checked(enabled).on_click(cx.listener(|this, checked: &bool, _, cx| {
+            this.setting_page.login_start = Some(*checked);
+            this.start_job(Job::set_login_start(*checked), cx);
+        }));
+        setting_row("Start at login", "Run the service automatically when you log in, like KANALI's \"Startup with Windows\".", switch).into_any_element()
+    }
+
+    /// Windows only lets kernel drivers read temperatures and fans; LibreHardwareMonitor provides them.
+    #[cfg(windows)]
+    fn sensors_card(&self) -> Option<impl IntoElement> {
+        let card = card().child(bold("Temperatures and fans", 19.0));
+        if self.status().number("/snapshot/cpu/temperature") > 0.0 {
+            return Some(card.child(status_dot(OK, "Reading them from LibreHardwareMonitor")));
+        }
+        Some(card.child(status_dot(LIME, "Not available: LibreHardwareMonitor is not running")).child(muted(
             "install-windows.ps1 installs LibreHardwareMonitor and starts it at login; run the installer again to repair it. \
              Until it runs, the CPU temperature reads 0, so the smart fan curve stays at its lowest speed.",
-        ));
-    });
+        )))
+    }
+
+    #[cfg(not(windows))]
+    fn sensors_card(&self) -> Option<Div> {
+        None
+    }
+
+    fn files_card(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let interval = self.editor.settings.update_interval_seconds as f32;
+        let slider = self.sliders.update_interval.show(interval, self.dragging, window, cx);
+        let control = div().flex().items_center().gap_3().child(div().w(px(260.0)).child(slider)).child(format!("{interval:.1} s"));
+        card()
+            .child(setting_row("Update interval", "How often live stats are sent to the screen.", control))
+            .child(file_location("Settings file", self.editor.path(), cx))
+            .child(file_location("Live status file", &self.setting_page.status_path, cx))
+    }
 }
 
-fn about_card(ui: &mut Ui) {
-    card(ui, |ui| {
-        ui.label(bold("About", 19.0));
-        ui.add_space(6.0);
-        info_line(ui, "Version", env!("CARGO_PKG_VERSION"));
-        ui.label(muted(
-            "Unofficial replacement for KANALI on Linux and Windows. Not affiliated with TRYX. The USB protocol was worked out from KANALI and the screen's own logs.",
-        ));
-    });
+fn file_location(title: &'static str, path: &Path, cx: &App) -> impl IntoElement {
+    let path = div().font_family(cx.theme().mono_font_family.clone()).text_size(px(12.5)).child(path.display().to_string());
+    div().flex().flex_col().gap_1().pt_1().child(muted(title)).child(path)
+}
+
+fn about_card() -> impl IntoElement {
+    card()
+        .child(bold("About", 19.0))
+        .child(info_line("Version", env!("CARGO_PKG_VERSION")))
+        .child(muted("Unofficial replacement for KANALI on Linux and Windows. Not affiliated with TRYX. The USB protocol was worked out from KANALI and the screen's own logs.").text_color(rgb(MUTED)))
+        .mb(px(CARD_GAP))
 }

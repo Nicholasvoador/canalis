@@ -1,181 +1,156 @@
 //! Reusable pieces of the KANALI-style layout.
 
-use super::theme::{self, BORDER, CARD, CARD_RADIUS, LIME, MUTED, TEXT};
-use eframe::egui::{self, Align, Color32, CornerRadius, Layout, Margin, Response, RichText, Rect, Sense, Stroke, Ui, UiBuilder, pos2, vec2};
+use super::shell::CanalisWindow;
+use super::theme::{BLACK, BORDER, CARD, CARD_RAISED, LIME, MUTED, TEXT, faded};
+use gpui_kit::component::button::{Button, ButtonVariants};
+use gpui_kit::component::switch::Switch;
+use gpui_kit::prelude::FluentBuilder;
+use gpui_kit::*;
+use std::rc::Rc;
 
-/// How far a page's scroll bar sits out in the window's right margin, clear of the cards.
-const SCROLL_BAR_GUTTER: i8 = 24;
+pub const CARD_GAP: f32 = 20.0;
+const CARD_PADDING: f32 = 24.0;
+/// The sidebar, the page's side margins and the scroll bar's gutter.
+const WIDTH_AROUND_CONTENT: f32 = 272.0 + 72.0 + 12.0;
 
-/// Scrolls a page's content, with the scroll bar out in the right margin instead of over the cards.
-pub fn page_scroll<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
-    let area = ui.available_rect_before_wrap();
-    let widened = area.with_max_x(area.right() + SCROLL_BAR_GUTTER as f32);
-    let mut margin = ui.spacing().scroll.content_margin;
-    margin.right += SCROLL_BAR_GUTTER;
-    ui.scope_builder(UiBuilder::new().max_rect(widened), |ui| egui::ScrollArea::vertical().auto_shrink(false).content_margin(margin).show(ui, add_contents).inner).inner
+/// How wide a page's cards are.
+pub fn content_width(window: &Window) -> f32 {
+    f32::from(window.viewport_size().width) - WIDTH_AROUND_CONTENT
 }
 
-pub fn bold(text: impl Into<String>, size: f32) -> RichText {
-    RichText::new(text).family(theme::bold_family()).size(size).color(TEXT)
+/// How much room there is inside a card that spans the page.
+pub fn card_inner_width(window: &Window) -> f32 {
+    content_width(window) - 2.0 * (CARD_PADDING + 1.0)
 }
 
-pub fn muted(text: impl Into<String>) -> RichText {
-    RichText::new(text).color(MUTED)
+pub fn bold(text: impl Into<SharedString>, size: f32) -> Div {
+    div().text_size(px(size)).font_weight(FontWeight::BOLD).text_color(rgb(TEXT)).child(text.into())
 }
 
-const CARD_MARGIN: i8 = 24;
-const CARD_STROKE_WIDTH: f32 = 1.0;
-
-/// The content height that makes a card exactly `outer_height` tall.
-pub fn card_content_height(outer_height: f32) -> f32 {
-    outer_height - 2.0 * (CARD_MARGIN as f32 + CARD_STROKE_WIDTH)
+pub fn muted(text: impl Into<SharedString>) -> Div {
+    div().text_color(rgb(MUTED)).child(text.into())
 }
 
-pub fn card<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
-    egui::Frame::new()
-        .fill(CARD)
-        .stroke(Stroke::new(CARD_STROKE_WIDTH, BORDER))
-        .corner_radius(CornerRadius::same(CARD_RADIUS))
-        .inner_margin(Margin::same(CARD_MARGIN))
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.vertical(add_contents).inner
-        })
-        .inner
+pub fn card() -> Div {
+    div().flex().flex_col().gap_2().p(px(CARD_PADDING)).bg(rgb(CARD)).border_1().border_color(rgb(BORDER)).rounded(px(16.0))
 }
 
-pub fn page_header(ui: &mut Ui, title: &str) {
-    ui.add_space(8.0);
-    ui.label(bold(title, 28.0));
-    ui.add_space(14.0);
-    divider(ui);
-    ui.add_space(14.0);
+pub fn divider() -> Div {
+    div().h(px(1.0)).w_full().flex_none().bg(rgb(BORDER))
 }
 
-pub fn divider(ui: &mut Ui) {
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
-    ui.painter().rect_filled(rect, 0, BORDER);
+pub fn page_header(title: &'static str) -> Div {
+    div().flex().flex_col().gap(px(14.0)).pt_2().pb(px(14.0)).child(bold(title, 28.0)).child(divider())
 }
 
 /// KANALI-style text tabs with a short lime underline under the selected one.
-pub fn tabs<T: PartialEq + Copy>(ui: &mut Ui, current: &mut T, options: &[(T, &str)]) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 32.0;
-        for (value, label) in options {
-            let selected = *current == *value;
-            let text = if selected { bold(*label, 15.0) } else { RichText::new(*label).size(15.0).color(MUTED) };
-            let response = ui.add(egui::Label::new(text).selectable(false).sense(Sense::click()));
-            if selected {
-                let underline = egui::Rect::from_min_size(pos2(response.rect.left(), response.rect.bottom() + 5.0), vec2(22.0, 3.0));
-                ui.painter().rect_filled(underline, 2, LIME);
-            }
-            if response.clicked() {
-                *current = *value;
-            }
-        }
-    });
-    ui.add_space(18.0);
+pub fn tabs<T: PartialEq + Copy + 'static>(current: T, options: &[(T, &'static str)], pick: fn(&mut CanalisWindow, T), cx: &mut Context<CanalisWindow>) -> Div {
+    let row = div().flex().gap(px(32.0)).pb(px(18.0));
+    row.children(options.iter().enumerate().map(|(index, &(value, label))| {
+        let selected = current == value;
+        let text = if selected { div().font_weight(FontWeight::BOLD).text_color(rgb(TEXT)) } else { div().text_color(rgb(MUTED)) };
+        let underline = div().mt(px(5.0)).w(px(22.0)).h(px(3.0)).rounded(px(2.0)).when(selected, |line| line.bg(rgb(LIME)));
+        div()
+            .id(("tab", index))
+            .flex()
+            .flex_col()
+            .cursor_pointer()
+            .child(text.child(label))
+            .child(underline)
+            .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                pick(this, value);
+                cx.notify();
+            }))
+    }))
 }
 
-/// iOS-style switch. Returns true when flipped.
-pub fn toggle(ui: &mut Ui, on: &mut bool) -> bool {
-    let (rect, response) = ui.allocate_exact_size(vec2(46.0, 26.0), Sense::click());
-    if response.clicked() {
-        *on = !*on;
-    }
-    let progress = ui.ctx().animate_bool_responsive(response.id, *on);
-    let track = if *on { LIME } else { theme::BORDER };
-    ui.painter().rect_filled(rect, 13, track);
-    let knob_x = egui::lerp((rect.left() + 13.0)..=(rect.right() - 13.0), progress);
-    let knob = if *on { theme::BLACK } else { TEXT };
-    ui.painter().circle_filled(pos2(knob_x, rect.center().y), 9.5, knob);
-    response.clicked()
+/// Row of mutually exclusive pills; picking one changes the settings.
+pub fn segmented<T: PartialEq + Clone + 'static>(
+    id: &'static str,
+    current: &T,
+    options: Vec<(T, String)>,
+    pick: impl Fn(&mut CanalisWindow, T) + 'static,
+    cx: &mut Context<CanalisWindow>,
+) -> Div {
+    let pick = Rc::new(pick);
+    div().flex().flex_wrap().gap(px(6.0)).children(options.into_iter().enumerate().map(|(index, (value, label))| {
+        let selected = *current == value;
+        let pick = pick.clone();
+        pill(SharedString::from(id), index, label, selected).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            pick(this, value.clone());
+            this.settings_changed(cx);
+        }))
+    }))
 }
 
-/// Row of mutually exclusive pill buttons. Returns true when the value changed.
-pub fn segmented<T: PartialEq + Clone>(ui: &mut Ui, current: &mut T, options: &[(T, String)]) -> bool {
-    let mut changed = false;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
-        for (value, label) in options {
-            let selected = *current == *value;
-            if pill(ui, label, selected).clicked() && !selected {
-                *current = value.clone();
-                changed = true;
-            }
-        }
-    });
-    changed
+/// A rounded button that stays on one line, lime when selected.
+pub fn pill(id: impl Into<SharedString>, index: usize, label: impl Into<SharedString>, selected: bool) -> Stateful<Div> {
+    let (fill, text, border) = if selected { (LIME, BLACK, LIME) } else { (CARD_RAISED, TEXT, BORDER) };
+    div()
+        .id((id.into(), index))
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .h(px(32.0))
+        .min_w(px(56.0))
+        .px(px(14.0))
+        .rounded(px(18.0))
+        .border_1()
+        .border_color(rgb(border))
+        .bg(rgb(fill))
+        .text_color(rgb(text))
+        .whitespace_nowrap()
+        .cursor_pointer()
+        .when(!selected, |pill| pill.hover(|style| style.bg(rgb(BORDER))))
+        .child(label.into())
 }
 
-pub fn pill(ui: &mut Ui, label: &str, selected: bool) -> Response {
-    ui.add(pill_button(label, selected))
+/// A pill that can't be picked right now.
+pub fn disabled_pill(id: impl Into<SharedString>, index: usize, label: impl Into<SharedString>) -> Stateful<Div> {
+    pill(id, index, label, false).opacity(0.4).cursor_default()
 }
 
-/// Pills keep their label on one line, so a wrapped row moves a whole pill to the next line.
-pub fn pill_button(label: &str, selected: bool) -> egui::Button<'_> {
-    let (fill, text_color) = if selected { (LIME, theme::BLACK) } else { (theme::CARD_RAISED, TEXT) };
-    egui::Button::new(RichText::new(label).color(text_color))
-        .wrap_mode(egui::TextWrapMode::Extend)
-        .fill(fill)
-        .stroke(Stroke::new(1.0, if selected { LIME } else { BORDER }))
-        .corner_radius(CornerRadius::same(18))
-        .min_size(vec2(56.0, 32.0))
+pub fn primary_button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Button {
+    Button::new(id).primary().label(label.into())
 }
 
-pub fn primary_button(ui: &mut Ui, label: &str) -> Response {
-    ui.add(
-        egui::Button::new(RichText::new(label).color(theme::BLACK).family(theme::bold_family()))
-            .fill(LIME)
-            .corner_radius(CornerRadius::same(10))
-            .min_size(vec2(120.0, 36.0)),
-    )
+pub fn secondary_button(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Button {
+    Button::new(id).outline().label(label.into())
 }
 
-pub fn secondary_button(ui: &mut Ui, label: &str) -> Response {
-    ui.add(egui::Button::new(label).stroke(Stroke::new(1.0, BORDER)).corner_radius(CornerRadius::same(10)).min_size(vec2(100.0, 36.0)))
+/// A switch that turns a setting on or off.
+pub fn setting_switch(id: &'static str, checked: bool, apply: fn(&mut CanalisWindow, bool), cx: &mut Context<CanalisWindow>) -> Switch {
+    Switch::new(id).checked(checked).on_click(cx.listener(move |this, checked: &bool, _, cx| {
+        apply(this, *checked);
+        this.settings_changed(cx);
+    }))
 }
 
-/// Title + description on the left, control on the right.
-pub fn setting_row(ui: &mut Ui, title: &str, description: &str, add_control: impl FnOnce(&mut Ui)) {
-    ui.horizontal(|ui| {
-        ui.vertical(|ui| {
-            ui.set_max_width((ui.available_width() - 380.0).max(240.0));
-            ui.label(bold(title, 15.5));
-            if !description.is_empty() {
-                ui.label(muted(description).size(13.0));
-            }
-        });
-        ui.with_layout(Layout::right_to_left(Align::Center), add_control);
-    });
-    ui.add_space(6.0);
-    divider(ui);
-    ui.add_space(6.0);
+/// Title and description on the left, control on the right, with a divider underneath.
+pub fn setting_row(title: impl Into<SharedString>, description: &'static str, control: impl IntoElement) -> Div {
+    let text = div().flex().flex_col().flex_1().gap_1().child(bold(title, 15.5)).when(!description.is_empty(), |text| text.child(muted(description).text_size(px(13.0))));
+    let row = div().flex().items_center().gap_6().py(px(6.0)).child(text).child(div().flex().items_center().gap_3().child(control));
+    div().flex().flex_col().gap(px(6.0)).child(row).child(divider())
 }
 
-/// A card filling exactly `rect` (already allocated by the caller); overflowing content is clipped.
-pub fn card_at(ui: &mut Ui, rect: Rect, add_contents: impl FnOnce(&mut Ui)) {
-    let mut card_ui = ui.new_child(UiBuilder::new().max_rect(rect));
-    card_ui.set_clip_rect(rect.intersect(ui.clip_rect()));
-    card(&mut card_ui, |ui| {
-        ui.set_min_height(ui.available_height());
-        add_contents(ui);
-    });
+/// A label column on the left, then the row's controls, wrapping onto more lines.
+pub fn style_row(label: &'static str, controls: impl IntoElement) -> Div {
+    let label = div().w(px(104.0)).flex_none().h(px(32.0)).flex().items_center().text_color(rgb(MUTED)).child(label);
+    div().flex().items_start().pb(px(12.0)).child(label).child(div().flex().flex_1().flex_wrap().items_center().gap(px(8.0)).child(controls))
 }
 
 /// A small coloured dot followed by text, used for connection state.
-pub fn status_dot(ui: &mut Ui, color: Color32, text: &str) {
-    ui.horizontal(|ui| {
-        let (rect, _) = ui.allocate_exact_size(vec2(10.0, 10.0), Sense::hover());
-        ui.painter().circle_filled(rect.center(), 5.0, color);
-        ui.label(RichText::new(text).color(TEXT));
-    });
+pub fn status_dot(color: u32, text: impl Into<SharedString>) -> Div {
+    div().flex().items_center().gap_2().child(div().size(px(10.0)).rounded_full().bg(rgb(color))).child(text.into())
 }
 
 /// Key/value line inside info cards.
-pub fn info_line(ui: &mut Ui, key: &str, value: &str) {
-    ui.horizontal(|ui| {
-        ui.label(muted(key));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| ui.label(RichText::new(value).color(TEXT)));
-    });
+pub fn info_line(key: &'static str, value: impl Into<SharedString>) -> Div {
+    div().flex().justify_between().gap_4().py_1().child(muted(key)).child(div().text_color(rgb(TEXT)).child(value.into()))
+}
+
+/// A spinner-like note shown while a job runs.
+pub fn busy_note(label: &'static str) -> Div {
+    div().flex().items_center().gap_2().text_color(rgb(MUTED)).child(div().size(px(8.0)).rounded_full().bg(faded(LIME, 0.8))).child(label)
 }

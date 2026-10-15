@@ -14,9 +14,10 @@ PREBUILT="$SOURCE_DIRECTORY/canalis"
 # android-tools is the one that bites, because an adb linked to a protobuf that isn't installed
 # cannot start, and Canalis needs adb for the screen's media, screenshots and theme pictures.
 # Upgrading everything alongside the install keeps the system whole, and nothing runs at all when
-# there is nothing to do. ffmpeg is what reads the screen's theme videos for the carousel.
+# there is nothing to do. ffmpeg is what reads the screen's theme videos for the carousel, and the
+# window draws through Vulkan, with xkbcommon for the keyboard and fontconfig to find its fonts.
 install_packages() {
-  local packages=(android-tools ffmpeg lm_sensors)
+  local packages=(android-tools ffmpeg lm_sensors vulkan-icd-loader libxkbcommon fontconfig)
   [[ -x "$PREBUILT" ]] || packages+=(rust)
   local missing=()
   local package

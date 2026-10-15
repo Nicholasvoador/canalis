@@ -1,10 +1,10 @@
 //! KANALI's "System Information Display": up to three stats and how they are drawn over the
 //! picture, for the built-in themes, the full-screen media or one half of a split screen.
 
-use crate::gui::shell::CanalisWindow;
-use crate::gui::theme::{BORDER, LIME};
-use crate::gui::widgets::{bold, card, disabled_pill, muted, pill, segmented, style_row};
-use crate::gui::screen_preview::parse_hex_color;
+use crate::ui::shell::CanalisWindow;
+use crate::ui::theme::{BORDER, LIME};
+use crate::ui::widgets::{bold, card, disabled_pill, muted, pill, segmented, style_row};
+use crate::ui::screen_preview::parse_hex_color;
 use crate::settings::{ALIGNMENTS, CPU_BADGE, DARK_TEXT, FILTERS, GPU_BADGE, LIGHT_TEXT, MAX_OVERLAY_FIELDS, OVERLAY_FIELDS, badge_is_available};
 use crate::ui::format::field_title;
 use gpui_kit::component::tooltip::Tooltip;
